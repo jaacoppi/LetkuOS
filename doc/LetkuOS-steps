@@ -1,0 +1,50 @@
+How to write your own OS
+========================
+
+These are the steps I took to write my own OS. It's a single tasking x86 OS that boots with grub and reads stuff from a FAT32 partition. I develop from linux.
+
+This text is written mainly for myself so I can reflect on the design decisions I've made and some day look back and learn from my mistakes. This text is not meant to be a copy-paste resource for creating your operating system. The aim of the text is to provide general instructions and ideas.
+
+Some of the theoretical reading I've used:
+Flynn & McHoes: Understanding operating systems (4rd edition)
+Tanenbaum & Woodhull: Operating systems: design & implementation (3rd edition) AKA the Minix book
+
+I've also got a lot of help the osdev.org wiki and community.
+
+
+Step 0 - Planning
+=================
+
+I chose what the osdev.org community refers to as a Lino Commando approach. Basically that means my goal would be to have a simple system with a working shell as early as possible.
+I had decided to aim for a single tasking OS something similar to game consoles like PS3, Xbox 360. The OS would be clearly visible after boot as a collection of menus. From those menus you would choose to start a program, a shell for example. 
+
+Developing a single tasking system is far easier than a multi tasking one. Memory management, processes and threads, scheduling etc are either non existent or not that crucial in a single tasking environment.
+
+Since I wasn't interested in the boot process or designing a custom file system I decided to boot with grub from a FAT32 file system. Also, I decided to use TCC as a compiler mainly because I thought it would later be easier to port to my OS to make it self-hosting. 
+
+Step 1 - The environment
+========================
+
+First, I needed a decent developing environment. I installed version tracking, an x86 emulator, an assembler  and a compiler + linker scripts. I then created a hard drive image and formatted it.
+
+
+The specifics:
+Install git and run git init for version control
+
+Emulator and disk image:
+Install bochs and run bximage (or dd) to create a hd image. setup .bochsrc with the line given by bximage. Format the image with fdisk -u -C#cylinders, losetup and mkdosfs (I used FAT32) . Install grub to the image to boot it.
+
+I had serious problems getting grub2 to install itself to my hd image, so I decided to use grub 0.97 instead. Both installing it through a package manager and compiling it from source failed because of my host distro, so I booted up both a livecd with grub 0.97 sources and my hd image with bochs, compiled grub inside the live environment and installed it there. My version of fdisk apparently wanted to support grub2 by starting the first partition from the 2048 mark insted of 63. I went with 63 because I thought I want to follow the traditional way. The choice was based on emotion, not reason.
+
+
+The compiler:
+Install tcc. No need for specific linker scripts since tcc handles it all. After 10+ years of experience with gcc, setting up tcc took some time.
+
+The assembler:
+I went with nasm. TCC has an assembler, but it uses gas syntax instead of intel that I'm used to.
+
+Finally, create a Makefile to easily compile the kernel, mount the image, copy the kernel to the image and unmount the image.
+
+At the end of this step I had a working environment for testing my OS. I tested it by copy-pasting a bare bones kernel from the osdev.org wiki. The compilation process was succesful. Bochs booted my image. Grub booted "my" kernel. In short, everything worked so far. Except for the problems with grub2 and fdisk the whole process took about 2 hours. Problems included, about 8.
+
+
