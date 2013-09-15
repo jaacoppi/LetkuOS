@@ -7,5 +7,7 @@
 #define VGA_GREY_ON_BLACK 0x07
 #define VGA_BLANK 0x00
 
+/* declarations */
 int init_video();
 int cls();
+int writech(char ch);

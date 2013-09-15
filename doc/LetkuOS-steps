@@ -48,3 +48,17 @@ Finally, create a Makefile to easily compile the kernel, mount the image, copy t
 At the end of this step I had a working environment for testing my OS. I tested it by copy-pasting a bare bones kernel from the osdev.org wiki. The compilation process was succesful. Bochs booted my image. Grub booted "my" kernel. In short, everything worked so far. Except for the problems with grub2 and fdisk the whole process took about 2 hours. Problems included, about 8.
 
 
+Step 2 - Basic I/O
+==================
+Having a decent I/O system early on greatly increases chances for debugging. I could setup function keys
+(F1-F12) to provide information about the inner workings of the kernel.
+
+
+
+For the intended menu system I'd need input & output.
+
+First, the output. I defined the video memory location, wrote a way to clear the screen and print lines to screen in color one line at a time.
+
+The video memory is contigious. Humans tend to think in lines. Therefore, an abstraction of x-y dimensions is needed to account for newlines, scrolling and so on.
+
+

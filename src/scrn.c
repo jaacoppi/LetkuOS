@@ -5,11 +5,20 @@ http://www.osdever.net/bkerndev/Docs/printing.htm for example
 */
 
 short *vga_memptr;
-int  vga_attrib=VGA_GREY_ON_BLACK;
+int  vga_defaultcolor = VGA_GREY_ON_BLACK;
+
+/* video memory is a block of contiguous memory. In contrast, humans tend to process information in chunks.
+Therefore, we need an abstraction of x-y dimension to utilize newlines
+*/
+int vga_cursorx;
+int vga_cursory;
 
 int init_video()
 {
 vga_memptr = (short *) VIDMEM;
+vga_cursorx=0;
+vga_cursory=0;
+
 cls();
 }
 
@@ -21,8 +30,8 @@ short blank = VGA_BLANK;
 int i, j;
 short *temp_ptr;
 
-/* 
-go trough every single char in 80x25 and set them to a space.
+/*
+go trough every single char in 80x25 and set them to blank (=space).
 The video memory is a short, so it has 16 bytes. The colors have to be pushed with the <<
 */
 
@@ -32,4 +41,30 @@ for (i = 0; i < 25; i++)
 		temp_ptr = (vga_memptr + (i*80) + j );
 		*temp_ptr = ' '|VGA_BLANK << 8; /* << 8 means we push the attribute byte into the short */
 		}
+}
+
+
+
+/* write a character to the screen */
+int writech(char ch)
+{
+/* a function to get vidmem position based on x and y */
+short *temp_ptr = vga_memptr + vga_cursory*80 + vga_cursorx;
+
+/* print a character to current x-y (=virtual cursor)  position */
+*temp_ptr = ch | vga_defaultcolor << 8; /* << 8 means we push the attribute byte into the short */
+
+/* advance the cursor */
+vga_cursorx++;
+
+/* start a new line for the virtual cursor if needed */
+if (vga_cursorx == 80)
+	{
+	vga_cursory++;
+	vga_cursorx = 0;
+	}
+
+/* TODO: scrolling */
+
+return 1;
 }
