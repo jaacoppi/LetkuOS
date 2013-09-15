@@ -40,6 +40,6 @@ install: all
 clean:
 	@rm -f $(SRCDIR)/*.o
 
-run:
+run: install
 	@echo "Running bochs"
 	@$(TESTING)/run_bochs
