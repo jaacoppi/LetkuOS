@@ -43,3 +43,6 @@ clean:
 run: install
 	@echo "Running bochs"
 	@$(TESTING)/run_bochs
+
+github: 
+	git push -u origin master
