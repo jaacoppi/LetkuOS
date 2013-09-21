@@ -11,3 +11,4 @@
 int init_video();
 int cls();
 int writech(char ch);
+int writeline(char *line);

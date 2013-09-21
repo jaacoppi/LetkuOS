@@ -3,7 +3,7 @@
 
 SRCDIR=src
 CC=tcc
-CFLAGS=-nostdlib -I./include -Wall,Wl,-Ttext,0x100000, -static
+CFLAGS=-nostdlib -I./include -Wall,Wl,-Ttext,0x100000, -static -DREVID="\"$(REVID)\""
 AS=nasm
 ASFLAGS=-f elf
 LD=ld
@@ -13,6 +13,7 @@ MOUNTPOINT=/mnt
 KERNELBIN=LetkuOS.krn
 TESTING=testing/
 BOOTFILE=$(SRCDIR)/boot.asm
+REVID=$(shell date)
 all: bootstuff sources linking
 
 bootstuff:

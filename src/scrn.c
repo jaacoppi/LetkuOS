@@ -48,11 +48,26 @@ for (i = 0; i < 25; i++)
 /* write a character to the screen */
 int writech(char ch)
 {
-/* a function to get vidmem position based on x and y */
-short *temp_ptr = vga_memptr + vga_cursory*80 + vga_cursorx;
 
 /* print a character to current x-y (=virtual cursor)  position */
+/* handle special cases first */
+switch (ch)
+	{
+	/* handle a new line */
+	case '\n':
+		vga_cursorx = 0;
+		vga_cursory++;
+		/* no need to do cursor stuff anymore */
+		return 1;
+	default:
+		break;
+	}
+
+/* get vidmem position based on x and y and print to it*/
+short *temp_ptr = vga_memptr + vga_cursory*80 + vga_cursorx;
 *temp_ptr = ch | vga_defaultcolor << 8; /* << 8 means we push the attribute byte into the short */
+
+
 
 /* advance the cursor */
 vga_cursorx++;
@@ -64,7 +79,21 @@ if (vga_cursorx == 80)
 	vga_cursorx = 0;
 	}
 
+
+
+
 /* TODO: scrolling */
+
+return 1;
+}
+
+int writeline(char *line)
+{
+while (*line) /* TODO: should this have a check of some sort, != \n or something? */
+	{
+	writech(*line);
+	line++;
+	}
 
 return 1;
 }
