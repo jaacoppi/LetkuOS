@@ -1,3 +1,5 @@
+#ifndef LETKUOS_SCRN
+#define LETKUOS_SCRN LETKUOS_SCRN
 /* scrn.h - screen related things */
 
 #define VIDMEM 0xB8000	/* video memory resides in 0xB8000), assuming it's a color monitor */ 
@@ -12,3 +14,5 @@ int init_video();
 int cls();
 int writech(char ch);
 int writeline(char *line);
+
+#endif
