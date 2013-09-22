@@ -2,6 +2,10 @@
 # originally for LetkuOS
 
 SRCDIR=src
+INCDIR=include
+SOURCES  := $(wildcard $(SRCDIR)/*.c)
+#INCLUDES := $(wildcard $(INCDIR)/*.h)
+OBJECTS  := $(SOURCES:.c=.o)
 CC=tcc
 CFLAGS=-nostdlib -I./include -Wall,Wl,-Ttext,0x100000, -static -DREVID="\"$(REVID)\""
 AS=nasm
@@ -13,23 +17,27 @@ MOUNTPOINT=/mnt
 KERNELBIN=LetkuOS.krn
 TESTING=testing/
 BOOTFILE=$(SRCDIR)/boot.asm
+BOOTOBJ=$(SRCDIR)/boot.o
 REVID=$(shell date)
-all: bootstuff sources linking
+
+
+all: linking
 
 bootstuff:
 	@echo "Assembling $(BOOTFILE).."
-	@$(AS) $(ASFLAGS) $(BOOTFILE) 	# assembly
+	@$(AS) $(ASFLAGS) $(BOOTFILE) -o $(BOOTOBJ) 	# assembly
 
-sources:
+$(OBJECTS): $(SOURCES) #$(INCLUDES)
 	@echo "Compiling C source files to object files.."
-	@$(CC) $(CFLAGS) -c $(SRCDIR)/main.c -o $(SRCDIR)/main.o	# C
-	@$(CC) $(CFLAGS) -c $(SRCDIR)/scrn.c -o $(SRCDIR)/scrn.o	# C
+	$(CC) $(CFLAGS) -o $@ -c $*.c	# C
 
-linking:
+
+linking: bootstuff $(OBJECTS)
 	@echo "Linking $(BOOTFILE) with C object files.."
-	@$(CC) $(CFLAGS) $(SRCDIR)/boot.o $(SRCDIR)/main.o $(SRCDIR)/scrn.o -o $(KERNELBIN)
+	$(CC) $(CFLAGS) $(OBJECTS) $(BOOTOBJ) -o $(KERNELBIN)
 	@echo ""
 	@echo "Kernel compilation finished. Kernel at $(KERNELBIN)"
+
 
 install: all
 	@echo "Needing root access for loopdevice.."
