@@ -20,6 +20,7 @@ vga_cursorx=0;
 vga_cursory=0;
 
 cls();
+return 1;
 }
 
 
@@ -39,8 +40,9 @@ for (i = 0; i < 25; i++)
 	for (j = 0; j <= 80; j++)
 		{
 		temp_ptr = (vga_memptr + (i*80) + j );
-		*temp_ptr = ' '|VGA_BLANK << 8; /* << 8 means we push the attribute byte into the short */
+		*temp_ptr = ' '| blank << 8; /* << 8 means we push the attribute byte into the short */
 		}
+return 1;
 }
 
 

@@ -71,12 +71,9 @@ struct idt_ptr_struct
 typedef struct idt_ptr_struct idt_ptr_t;
 
 int init_idt();
-static void idt_set_gate(unsigned char,int,unsigned short int,unsigned char);
 
-/* id
-
-t flush from boot.asm */
-extern void idt_flush(u32int);
+/* idt flush from boot.asm */
+extern void idt_flush();
 
 
 /* handlers found in boot.asm */
@@ -113,6 +110,8 @@ extern void isr29 ();
 extern void isr30 ();
 extern void isr31 ();
 
+int idt_set_gate(unsigned char num, int base, unsigned short int sel, unsigned char flags);
+int gdt_set_gate(int num, unsigned long base, unsigned long limit, unsigned char access, unsigned char gran);
 
 
 #endif

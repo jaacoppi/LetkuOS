@@ -53,6 +53,7 @@ install: all
 
 clean:
 	@rm -f $(SRCDIR)/*.o
+	@rm -f $(CLIBDIR)/*.o
 
 run: install
 	@echo "Running bochs"

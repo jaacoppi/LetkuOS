@@ -13,14 +13,15 @@ gdt_entry_t gdt_entries[NUM_GDT];
 gdt_ptr_t gdt_ptr;
 idt_entry_t idt_entries[NUM_IDT];
 idt_ptr_t   idt_ptr;
-static void gdt_set_gate(int num, unsigned long base, unsigned long limit, unsigned char access, unsigned char gran);
+
+extern int gdt_flush();
 
 int init_gdt()
 {
 /* initialize the pointer */
 gdt_ptr.limit = (sizeof(gdt_entry_t) * NUM_GDT) -1; /* the size of our gdt entry is 5 gdt entries */
 // gdt_ptr.base = (u32int)&gdt_entries; /* store the gdt register from where ever gdt_entries begins */
-gdt_ptr.base = &gdt_entries; /* store the gdt register from where ever gdt_entries begins */
+gdt_ptr.base = (unsigned int)&gdt_entries; /* store the gdt register from where ever gdt_entries begins */
 
 /* set the gates */
 /* from intel manuals :
@@ -55,7 +56,7 @@ return 1;
 
 /* init one gdt_entry with parameters */
 //static void gdt_set_gate(s32int num, u32int base, u32int limit, u8int access, u8int gran)
-static void gdt_set_gate(int num, unsigned long base, unsigned long limit, unsigned char access, unsigned char gran)
+int gdt_set_gate(int num, unsigned long base, unsigned long limit, unsigned char access, unsigned char gran)
 {
 /* use bit manipulation to get the correct base address */
    gdt_entries[num].base_low    = (base & 0xFFFF);
@@ -71,6 +72,8 @@ static void gdt_set_gate(int num, unsigned long base, unsigned long limit, unsig
 
 /* access byte is already masked at function call time */
    gdt_entries[num].access      = access;
+
+return 1;
 }
 
 int init_idt()
@@ -121,7 +124,7 @@ return 1;
 
 
 
-static void idt_set_gate(unsigned char num, int base, unsigned short int sel, unsigned char flags)
+int idt_set_gate(unsigned char num, int base, unsigned short int sel, unsigned char flags)
 {
    idt_entries[num].base_low = base & 0xFFFF;
    idt_entries[num].base_high = (base >> 16) & 0xFFFF;
@@ -131,4 +134,6 @@ static void idt_set_gate(unsigned char num, int base, unsigned short int sel, un
    // TODO: We must uncomment the OR below when we get to using user-mode.
    // It sets the interrupt gate's privilege level to 3.
    idt_entries[num].flags   = flags /* | 0x60 */;
+
+return 1;
 }

@@ -81,10 +81,12 @@ gdt_flush:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 [GLOBAL idt_flush]    ; Allows the C code to call idt_flush().
+extern idt_ptr
 
 idt_flush:
-mov eax, [esp+4]  ; Get the pointer to the IDT, passed as a parameter.
-lidt [eax]        ; Load the IDT pointer.
+;mov eax, [esp+4]  ; Get the pointer to the IDT, passed as a parameter.
+;lidt [eax]        ; Load the IDT pointer.
+	lidt [idt_ptr] ; load from extern pointer
 ret
 
 
