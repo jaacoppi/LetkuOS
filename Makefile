@@ -2,12 +2,16 @@
 # originally for LetkuOS
 
 SRCDIR=src
+CLIBDIR=$(SRCDIR)/clib
 INCDIR=include
-SOURCES  := $(wildcard $(SRCDIR)/*.c)
+SOURCES  := $(wildcard $(SRCDIR)/*.c $(CLIBDIR)/*.c)
 #INCLUDES := $(wildcard $(INCDIR)/*.h)
 OBJECTS  := $(SOURCES:.c=.o)
-CC=tcc
-CFLAGS=-nostdlib -I./include -Wall,Wl,-Ttext,0x100000, -static -DREVID="\"$(REVID)\""
+CC=gcc
+CFLAGS=-Wall -Wextra -I./include -nostartfiles  -fno-builtin -nostdinc \
+        -nodefaultlibs -nostdlib -std=c99 -Wno-main \
+	-static -DREVID="\"$(REVID)\""
+
 AS=nasm
 ASFLAGS=-f elf
 LD=ld
@@ -29,12 +33,13 @@ bootstuff:
 
 $(OBJECTS): $(SOURCES) #$(INCLUDES)
 	@echo "Compiling C source files to object files.."
-	$(CC) $(CFLAGS) -o $@ -c $*.c	# C
+	@$(CC) $(CFLAGS) -o $@ -c $*.c	# C
 
 
 linking: bootstuff $(OBJECTS)
 	@echo "Linking $(BOOTFILE) with C object files.."
-	$(CC) $(CFLAGS) $(OBJECTS) $(BOOTOBJ) -o $(KERNELBIN)
+	@$(LD) -T $(SRCDIR)/linker.ld -o $(KERNELBIN) $(BOOTOBJ) $(OBJECTS) #-L$(LIBGCC)
+#	$(CC) $(CFLAGS) $(OBJECTS) $(BOOTOBJ) -o $(KERNELBIN)
 	@echo ""
 	@echo "Kernel compilation finished. Kernel at $(KERNELBIN)"
 
