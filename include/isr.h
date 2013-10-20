@@ -4,6 +4,8 @@
 // Rewritten for JamesM's kernel development tutorials.
 //
 
+#ifndef _letkuos_isrs_h
+#define _letkuos_isrs_h  _letkuos_isrs_h
 
 //
 // isr.h -- Interface and structures for high level interrupt service routines.
@@ -53,27 +55,6 @@ typedef struct registers
 #define ERR_30 30
 #define ERR_31 31
 
+extern char *exception_messages[];
 
-/*
-
-0 Division By Zero Exception
-1 Debug Exception
-2 Non Maskable Interrupt Exception
-3 Breakpoint Exception
-4 Into Detected Overflow Exception
-5 Out of Bounds Exception
-6 Invalid Opcode Exception
-7 No Coprocessor Exception
-8 Double Fault Exception
-9 Coprocessor Segment Overrun Exception
-10Bad TSS Exception
-11Segment Not Present Exception
-12Stack Fault Exception
-13General Protection Fault Exception
-14Page Fault Exception
-15Unknown Interrupt Exception
-16Coprocessor Fault Exception
-17Alignment Check Exception (486+)
-18Machine Check Exception (Pentium/586+)        No
-19 to 31        Reserved Exceptions
-*/
+#endif
