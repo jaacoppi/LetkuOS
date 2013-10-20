@@ -25,13 +25,20 @@ BOOTOBJ=$(SRCDIR)/boot.o
 REVID=$(shell date)
 
 
-all: linking
+all: beginning $(BOOTOBJ) $(OBJECTS)
+	@echo "Linking $(BOOTFILE) with C object files.."
+	@$(LD) -T $(SRCDIR)/linker.ld -o $(KERNELBIN) $(BOOTOBJ) $(OBJECTS) #-L$(LIBGCC)
+	@echo ""
+	@echo "############################################################"
+	@echo "# Kernel compilation finished. Kernel saved to $(KERNELBIN) #"
+	@echo "############################################################"
+
 
 beginning:
 	@echo "Starting kernel compilation..."
 	@echo "##############################"
 
-bootstuff:
+$(BOOTOBJ):
 	@echo "Assembling $(BOOTFILE).."
 	@$(AS) $(ASFLAGS) $(BOOTFILE) -o $(BOOTOBJ) 	# assembly
 
@@ -39,15 +46,6 @@ $(OBJECTS): $(SOURCES) #$(INCLUDES)
 	@echo "Compiling C source file $@"
 	@$(CC) $(CFLAGS) -o $@ -c $*.c	# C
 
-
-linking: beginning bootstuff $(OBJECTS)
-	@echo "Linking $(BOOTFILE) with C object files.."
-	@$(LD) -T $(SRCDIR)/linker.ld -o $(KERNELBIN) $(BOOTOBJ) $(OBJECTS) #-L$(LIBGCC)
-#	$(CC) $(CFLAGS) $(OBJECTS) $(BOOTOBJ) -o $(KERNELBIN)
-	@echo ""
-	@echo "############################################################"
-	@echo "# Kernel compilation finished. Kernel saved to $(KERNELBIN) #"
-	@echo "############################################################"
 
 
 install: all
@@ -67,3 +65,4 @@ run: install
 
 github: 
 	git push -u origin master
+
