@@ -27,21 +27,27 @@ REVID=$(shell date)
 
 all: linking
 
+beginning:
+	@echo "Starting kernel compilation..."
+	@echo "##############################"
+
 bootstuff:
 	@echo "Assembling $(BOOTFILE).."
 	@$(AS) $(ASFLAGS) $(BOOTFILE) -o $(BOOTOBJ) 	# assembly
 
 $(OBJECTS): $(SOURCES) #$(INCLUDES)
-	@echo "Compiling C source files to object files.."
+	@echo "Compiling C source file $@"
 	@$(CC) $(CFLAGS) -o $@ -c $*.c	# C
 
 
-linking: bootstuff $(OBJECTS)
+linking: beginning bootstuff $(OBJECTS)
 	@echo "Linking $(BOOTFILE) with C object files.."
 	@$(LD) -T $(SRCDIR)/linker.ld -o $(KERNELBIN) $(BOOTOBJ) $(OBJECTS) #-L$(LIBGCC)
 #	$(CC) $(CFLAGS) $(OBJECTS) $(BOOTOBJ) -o $(KERNELBIN)
 	@echo ""
-	@echo "Kernel compilation finished. Kernel at $(KERNELBIN)"
+	@echo "############################################################"
+	@echo "# Kernel compilation finished. Kernel saved to $(KERNELBIN) #"
+	@echo "############################################################"
 
 
 install: all
