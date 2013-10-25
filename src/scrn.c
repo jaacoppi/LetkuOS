@@ -48,7 +48,7 @@ return 1;
 
 
 /* write a character to the screen */
-int writech(char ch)
+int writech(unsigned char ch)
 {
 
 /* print a character to current x-y (=virtual cursor)  position */
@@ -58,7 +58,7 @@ switch (ch)
 	/* handle a new line */
 	case '\n':
 		vga_cursorx = 0;
-		vga_cursory++;
+		vga_cursory++; /* TODO: don't advance X anymore */
 		/* no need to do cursor stuff anymore */
 		return 1;
 	default:

@@ -15,12 +15,11 @@
 
 typedef struct registers
 {
-   int ds;                  // Data segment selector
+   int gs, fs, es, ds;
    int edi, esi, ebp, esp, ebx, edx, ecx, eax; // Pushed by pusha.
    int int_no, err_code;    // Interrupt number and error code (if applicable)
    int eip, cs, eflags, useresp, ss; // Pushed by the processor automatically.
 } registers_t;
-
 
 #define ERR_0 0
 #define ERR_1 1

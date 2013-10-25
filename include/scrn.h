@@ -12,7 +12,7 @@
 /* declarations */
 int init_video();
 int cls();
-int writech(char ch);
+int writech(unsigned char ch);
 int writeline(char *line);
 
 #endif

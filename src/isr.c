@@ -48,7 +48,7 @@ char *exception_messages[] =
 /* TODO: write a function to write numbers - printf? */
 void isr_handler(registers_t regs)
 {
-writeline("received interrupt: ");
+printf("received interrupt: ");
 
 switch (regs.int_no)
         {

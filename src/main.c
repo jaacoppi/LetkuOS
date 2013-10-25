@@ -3,6 +3,7 @@
 #include "letkuos-common.h"
 #include "irq.h"
 #include "stdio.h"
+#include "keyboard.h"
 
 /* http://www.gnu.org/software/grub/manual/multiboot/multiboot.html */
 /* The Multiboot information. Not complete, only the parts we care about 
@@ -18,12 +19,14 @@ init_video();
 init_gdt();
 init_idt();
 init_irq();
+init_keyboard();
 printf("%s (build %s)\n",CODENAME, REVID);
-writeline(COPYRIGHT);
-writeline("\n\nHELLO WORLD!\n");
-//asm volatile ("int $0x4");
+printf("%s\n\n", COPYRIGHT);
 
-while(1) { __asm__ __volatile__ ("hlt"::); }
+//__asm__ __volatile__ ("int $0x4");
+
+while(1) { __asm__ __volatile__ ("hlt"::);}
+
 }
 
 

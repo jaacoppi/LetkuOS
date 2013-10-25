@@ -102,6 +102,7 @@ void init_irq()
     idt_set_gate(46, (unsigned)irq14, 0x08, 0x8E);
     idt_set_gate(47, (unsigned)irq15, 0x08, 0x8E);
 
+__asm__ __volatile__ ("sti");
 }
 
 /* Each of the IRQ ISRs point to this function, rather than
@@ -126,9 +127,11 @@ void irq_handler(struct registers *r)
     {
         handler(r);
     }
+/*
 	else {
 	printf("debug, unidentified IRQ %d\n", r->int_no - 32);
 	}
+*/
     /* If the IDT entry that was invoked was greater than 40
     *  (meaning IRQ8 - 15), then we need to send an EOI to
     *  the slave controller */
@@ -140,6 +143,7 @@ void irq_handler(struct registers *r)
     /* In either case, we need to send an EOI to the master
     *  interrupt controller too */
     outb(0x20, 0x20);
+
 }
 
 /* http://en.wikipedia.org/wiki/Interrupt_request

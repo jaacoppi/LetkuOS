@@ -61,6 +61,8 @@ global irq15
 
 
 extern main            ; main is in main.c
+extern isr_handler
+extern irq_handler
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -193,7 +195,6 @@ ISR_NOERRCODE 30
 ISR_NOERRCODE 31
 
  ; In isr.c
-[EXTERN isr_handler]
 
 ; This is our common ISR stub. It saves the processor state, sets
 ; up for kernel mode segments, calls the C-level fault handler,
@@ -382,7 +383,5 @@ align 32
 
 stack:
    resb STACKSIZE                     ; reserve 16k stack on a quadword boundary
-extern fault_handler
-extern irq_handler
 
 
