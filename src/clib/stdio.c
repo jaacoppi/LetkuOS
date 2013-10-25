@@ -53,10 +53,12 @@ else {
 				}
 			break;
 
-		case 'c':
-			pos = va_arg(args, unsigned char *);
-			writech(*pos);
+		case 'c': /* TODO: should s and c be similar? should s use writeline? */
+			{
+			unsigned char  writec = va_arg(args, unsigned char);
+			writech(writec);
 			break;
+			}
 
 		case '%':
 			writech('%');

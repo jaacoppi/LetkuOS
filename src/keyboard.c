@@ -62,10 +62,12 @@ void keyboard_handler(struct registers *r)
     /* Read from the keyboard's data buffer */
     scancode = inb(KEYB_DATA);
 
-	/* TODO: skip key release */
+	/* handle key release by skipping it for now */
+	if (scancode > 128)
+		return;
 
-	/* sent the keycode to the actual keyboard driver */
-	scancode_handler(scancode);
+ 	/* else, sent the keycode to the actual keyboard driver */
+		scancode_handler(scancode);
 }
 
 
@@ -73,11 +75,6 @@ void keyboard_handler(struct registers *r)
 
 void scancode_handler (unsigned char scancode)
 {
-if (scancode < 128) /* skip key release */
-	writech(keymap_us[scancode]);
-
-/* TODO: figure out why printf doesn't work */
-//printf("%c",keymap_us[scancode]);
-//printf("here: %d\n",scancode);
+printf("%c",keymap_us[scancode]);
 }
 

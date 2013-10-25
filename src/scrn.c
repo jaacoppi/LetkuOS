@@ -58,7 +58,7 @@ switch (ch)
 	/* handle a new line */
 	case '\n':
 		vga_cursorx = 0;
-		vga_cursory++; /* TODO: don't advance X anymore */
+		vga_cursory++;
 		/* no need to do cursor stuff anymore */
 		return 1;
 	default:
