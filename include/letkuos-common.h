@@ -5,4 +5,16 @@
 
 #define NULL 0
 
+#define BIT0 1
+#define BIT1 2
+#define BIT2 4
+#define BIT3 8
+#define BIT4 16
+#define BIT5 32
+#define BIT6 64
+#define BIT7 128
+
+#define true 1
+#define false 0
+
 #endif

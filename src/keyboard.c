@@ -7,6 +7,7 @@
 #include "stdio.h"
 
 void keyboard_handler(struct registers *r);
+extern void los_reboot();
 
 unsigned char keymap_us[128] =
 {
@@ -61,6 +62,10 @@ void keyboard_handler(struct registers *r)
     unsigned char scancode;
     /* Read from the keyboard's data buffer */
     scancode = inb(KEYB_DATA);
+
+	/* hardware reset */
+	if (scancode == 88) /* F12 */
+		los_reboot();
 
 	/* handle key release by skipping it for now */
 	if (scancode > 128)
