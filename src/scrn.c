@@ -6,12 +6,15 @@ http://www.osdever.net/bkerndev/Docs/printing.htm for example
 
 short *vga_memptr;
 int  vga_defaultcolor = VGA_GREY_ON_BLACK;
+short blank = VGA_BLANK;
 
 /* video memory is a block of contiguous memory. In contrast, humans tend to process information in chunks.
 Therefore, we need an abstraction of x-y dimension to utilize newlines
 */
 int vga_cursorx;
 int vga_cursory;
+
+void screen_scroll();
 
 int init_video()
 {
@@ -27,7 +30,6 @@ return 1;
 /* clears the screen */
 int cls()
 {
-short blank = VGA_BLANK;
 int i, j;
 short *temp_ptr;
 
@@ -50,7 +52,6 @@ return 1;
 /* write a character to the screen */
 int writech(unsigned char ch)
 {
-
 /* print a character to current x-y (=virtual cursor)  position */
 /* handle special cases first */
 switch (ch)
@@ -59,11 +60,19 @@ switch (ch)
 	case '\n':
 		vga_cursorx = 0;
 		vga_cursory++;
-		/* no need to do cursor stuff anymore */
-		return 1;
+		break;
 	default:
 		break;
 	}
+
+/* scrolling */
+if (vga_cursory >= 25) /* 25 lines, start from 0 */
+	{
+	screen_scroll();
+	vga_cursorx = 0;
+	}
+
+
 
 /* get vidmem position based on x and y and print to it*/
 short *temp_ptr = vga_memptr + vga_cursory*80 + vga_cursorx;
@@ -81,11 +90,6 @@ if (vga_cursorx == 80)
 	vga_cursorx = 0;
 	}
 
-
-
-
-/* TODO: scrolling */
-
 return 1;
 }
 
@@ -98,4 +102,31 @@ while (*line) /* TODO: should this have a check of some sort, != \n or something
 	}
 
 return 1;
+}
+
+/* scroll screen down one line */
+void screen_scroll()
+{
+vga_cursory--;
+
+short *temp_ptr;
+/* TODO: use memcopy or something to copy the whole line, don't do char by char */
+int i;
+
+for (i = 0; i < 25*80; i++) /* 25*80 = whole buffer */
+	{
+	temp_ptr = (vga_memptr + i);
+
+	/* take the char from direcly one line above and print it to the screen */
+	short *next_ptr = (temp_ptr + 80);
+	short ch = (short ) (*next_ptr);
+	*temp_ptr = (char )ch | vga_defaultcolor << 8; 
+	}
+
+/* clear the last line so it can be used for writing after this function returns */
+for (i = 0; i < 80; i++)
+	{
+	temp_ptr = (vga_memptr + (24*80) + i);
+	*temp_ptr = ' '| blank << 8;
+	}
 }
