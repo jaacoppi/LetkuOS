@@ -4,5 +4,6 @@
 
 short *memsetw(short *dest, short val, int count);
 void *memset(void *dest, char val, int count);
+char *strcpy(char *dest, const char *src);
 
 #endif
