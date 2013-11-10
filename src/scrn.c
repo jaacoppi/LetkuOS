@@ -80,8 +80,9 @@ short *temp_ptr = vga_memptr + vga_cursory*80 + vga_cursorx;
 
 
 
-/* advance the cursor */
-vga_cursorx++;
+/* advance the cursor, except when the char is a newline */
+if (ch != '\n')
+	vga_cursorx++;
 
 /* start a new line for the virtual cursor if needed */
 if (vga_cursorx == 80)
