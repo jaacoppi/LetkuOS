@@ -140,6 +140,7 @@ else
 
 	msbtolsb(ata_id.sernum, sizeof(ata_id.sernum));
 	msbtolsb(ata_id.modelnum, sizeof(ata_id.modelnum));
+	msbtolsb((char *)ata_id.lba_sectors,sizeof(ata_id.lba_sectors));
 
 	harddrive->exists = true;
 	/* print some debug info */

@@ -57,7 +57,7 @@ struct ata_identify {
 	unsigned int lba_sectors; /* words 60-61 - "total number of user accessable logical sectors */
 /* This field contains a value that is one greater than the maximum user accessible logical block address. The
 maximum value that shall be placed in this field is 0FFF_FFFFh. */
-
+/* TODO: find out the meaning of logical sectors - it seems that it doesn't mean the hard drive size */
 	unsigned short ignore4[194]; /* words 62-127 */
 } __attribute__ ((packed));
 
