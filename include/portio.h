@@ -3,5 +3,6 @@
 
 unsigned char inb (unsigned short _port);
 void outb (unsigned short _port, unsigned char _data);
+int in16s(unsigned short port, int count, unsigned char *buf);
 #endif
 

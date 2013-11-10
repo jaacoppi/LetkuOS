@@ -5,6 +5,7 @@
 #include "stdio.h"
 #include "keyboard.h"
 #include "portio.h"
+#include "ata.h"
 
 void los_reboot();
 /* http://www.gnu.org/software/grub/manual/multiboot/multiboot.html */
@@ -22,6 +23,7 @@ init_gdt();
 init_idt();
 init_irq();
 init_keyboard();
+init_ata();
 printf("%s (build %s)\n",CODENAME, REVID);
 printf("%s\n", COPYRIGHT);
 
