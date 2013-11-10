@@ -86,6 +86,7 @@ if (keyb_keyup)
 /* left shift is down - capitalize */
 if (scancode == KEY_LS)
 	{
+	printf("layer!\n");
 	layer = 1;
 	return;
 	}
@@ -110,10 +111,6 @@ if (ps2_control_byte)
 	/* hardware reset */
 	if (scancode == KEY_F12)
 		los_reboot();
-
-	/* handle key release by skipping it for now */
-//	if (scancode > 128)
-//		return;
 
  	/* else, sent the keycode to the actual keyboard driver */
 		scancode_handler(scancode);
