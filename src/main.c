@@ -19,14 +19,15 @@ struct multiboot_info bootinfo;
 int main(struct multiboot_info *boot_info, int magic) {
 
 init_video();
+printf("%s (build %s)\n",CODENAME, REVID);
+printf("%s\n", COPYRIGHT);
 init_gdt();
 init_idt();
 init_irq();
 init_keyboard();
 init_ata();
-printf("%s (build %s)\n",CODENAME, REVID);
-printf("%s\n", COPYRIGHT);
 
+printf("%s booted and ready to go!\n", CODENAME);
 //__asm__ __volatile__ ("int $0x4");
 
 while(1) { __asm__ __volatile__ ("hlt"::);}

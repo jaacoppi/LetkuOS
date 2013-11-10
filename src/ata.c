@@ -95,32 +95,67 @@ int i = ata_inb(ata_dataport + ATA_CMDSTATUS);
 if (i == 0) /* if the result is 0, this ATA drive does not exist */
 	{
 	harddrive->exists = false;
-	printf("no ATA drive detected on controller 0x%xh, master/slave 0x%xh\n",ata_dataport, ata_mastersel);
-	printf("TODO: error out here, now just returns\n");
 	return;
 	}
+else
+	{ // the drive exists, do some more checking
+	/* Because of some ATAPI drives that do not follow spec, at this point you need to check the LBAmid and LBAhi ports
+	(0x1F4 and 0x1F5) to see if they are non-zero. If so, the drive is not ATA, and you should stop polling. */
 
-/* Because of some ATAPI drives that do not follow spec, at this point you need to check the LBAmid and LBAhi ports
-(0x1F4 and 0x1F5) to see if they are non-zero. If so, the drive is not ATA, and you should stop polling. */
+	/* TODO: implement the above instructions from wiki.osdev.org */
 
-/* TODO: implement the above instructions from wiki.osdev.org */
+	/* Otherwise, continue polling one of the Status ports until bit 3 (DRQ, value = 8) sets, or until bit 0 (ERR, value = 1) sets. */
+	while (!(ata_inb(ata_dataport + ATA_CMDSTATUS)&ATA_STATUS_DRQ))
+	while (inb(ata_dataport + ATA_CMDSTATUS)&ATA_STATUS_ERR);
 
-/* Otherwise, continue polling one of the Status ports until bit 3 (DRQ, value = 8) sets, or until bit 0 (ERR, value = 1) sets. */
-while (!(ata_inb(ata_dataport + ATA_CMDSTATUS)&ATA_STATUS_DRQ))
-while (inb(ata_dataport + ATA_CMDSTATUS)&ATA_STATUS_ERR);
+	/* At that point, if ERR is clear, the data is ready to read from the Data port (0x1F0). Read 256 words, and store them. */
 
-/* At that point, if ERR is clear, the data is ready to read from the Data port (0x1F0). Read 256 words, and store them. 
-*/
+	/* read the Ata identify packet to the struct ata_id */
+	/* TODO: is this a pointer mess or the proper way to do it? */
+	struct ata_identify ata_id;
+	struct ata_identify *ataptr;
+	ataptr = &ata_id;
+	unsigned char buffer[512] = "";
+	in16s(ata_dataport, (512 / 2), buffer);
+	memcpy ( (char *) ataptr,buffer,sizeof(buffer));
 
-/* TODO: use struct ata_identify to store these values */
-struct ata_identify ata_id;
-unsigned char buffer[512] = "";
-//in16s(ata_dataport, (512 / 2), buffer);
-in16s(ata_dataport, (512 / 2), buffer);
-//strcpy(ata_id,buffer);
-/* simple debug to see the model number / name. Apparently doesn't work now. */
-printf("here: %c, %c, %c, %c, %c, %c\n", buffer[55], buffer[56], buffer[57], buffer[58], buffer[59]);
-printf("here: %c, %c, %c, %c, %c, %c\n", buffer[60], buffer[61], buffer[62], buffer[63], buffer[64]);
+	/* ATA Identify is in space padded MSB format. "Generic 1234" comes out as "eGenir c2143". Null terminate them and change byte order */
+	char *ptr;
+	ptr  = ata_id.sernum;
+	/* go to the end of sernum and null terminate all spaces. We can't start from the beginning, because there might be spaces in modelnum (Generic 1234)*/
+	ptr = ptr + sizeof(ata_id.sernum);
+	while (*ptr == ' ')
+		{
+		*ptr = '\0';
+		ptr--;
+		}
+
+	ptr = ata_id.modelnum;
+	ptr = ptr + sizeof(ata_id.modelnum);
+	while (*ptr == ' ')
+		{
+		*ptr = '\0';
+		ptr--;
+		}
+
+	msbtolsb(ata_id.sernum, sizeof(ata_id.sernum));
+	msbtolsb(ata_id.modelnum, sizeof(ata_id.modelnum));
+
+	harddrive->exists = true;
+	/* print some debug info */
+	printf("found an ATA driver on ");
+	if (controlsel == ATA_PRI_DATAPORT)
+		printf("1st");
+	else
+		printf("2nd");
+
+	printf(" controller");
+	if (drivesel == MASTER_HD)
+		printf(" master bus");
+	else
+		printf(" slave bus");
+	printf(" model %s, serial %s\n", ata_id.modelnum, ata_id.sernum);
+	}
 return;
 }
 

@@ -59,6 +59,6 @@ struct ata_identify {
 maximum value that shall be placed in this field is 0FFF_FFFFh. */
 
 	unsigned short ignore4[194]; /* words 62-127 */
-};
+} __attribute__ ((packed));
 
 #endif
