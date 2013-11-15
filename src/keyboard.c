@@ -11,7 +11,7 @@ and from Acess2 */
 #include "keyboard.h"
 #include "stdio.h"
 #include "letkuos-common.h"
-
+#include "errors.h"
 
 #define KEYB_CONTROL_CONFIG_BYTE_READ 0x20
 #define KEYB_CONTROL_CONFIG_BYTE_WRITE 0x60

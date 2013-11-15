@@ -46,7 +46,7 @@ char test[10] ="214365";
 msbtolsb(test, sizeof(test));
 printf("test: %s\n",test);
 */
-int msbtolsb(char *ptr, int count)
+void msbtolsb(char *ptr, int count)
 {
 int i;
 for (i = 0; i < count / 2; i++)
@@ -60,5 +60,6 @@ for (i = 0; i < count / 2; i++)
         *ptr = tmp;
         ptr++;
         }
+return;
 }
 

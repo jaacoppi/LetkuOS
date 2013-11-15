@@ -9,7 +9,9 @@ http://www.t13.org/documents/UploadedDocuments/docs2006/D1699r3f-ATA8-ACS.pdf
 /* simple ATA PIO driver */
 /* used info from http://wiki.osdev.org/ATA_PIO_Mode */
 
-extern void init_ata();
+void init_ata();
+char *readblock(int lba_address);
+extern struct hd hda, hdb, hdc, hdd; /* these are our hard drives */
 
 /* from exclaim-0.2.1, thanks for explaing bits and hexes */
 #define ATA_CHECK_ERROR         0
@@ -24,7 +26,9 @@ extern void init_ata();
 #define ATA_STATUS_RDY          0x40
 #define ATA_STATUS_BSY          0x80
 
+/* commands */
 #define ATA_IDENTIFY		0xEC	/* identify command to.. idenfity the drive */
+#define ATA_READSECTORS		0x20	/* do exactly what the name says */
 
 /* Dataports in absolute values */
 #define ATA_PRI_DATAPORT        0x1F0
