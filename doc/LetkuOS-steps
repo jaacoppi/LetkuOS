@@ -57,8 +57,33 @@ Having a decent I/O system early on greatly increases chances for debugging. I c
 
 For the intended menu system I'd need input & output.
 
-First, the output. I defined the video memory location, wrote a way to clear the screen and print lines to screen in color one line at a time.
+First, the output. I defined the video memory location, wrote a way to clear the screen and print lines to 
+screen in color one line at a time.
 
-The video memory is contigious. Humans tend to think in lines. Therefore, an abstraction of x-y dimensions is needed to account for newlines, scrolling and so on.
+The video memory is contigious. Humans tend to think in lines. Therefore, an abstraction of x-y dimensions is 
+needed to account for newlines, scrolling and so on.
 
+After an abstraction is setup, one needs a function to print a single char. The function also handles newlines 
+and other possible special cases. Building on that, a function that prints full lines is easy to code by 
+looping single chars through the first function. Now we have a way to print project name, build information 
+and copyright information on startup. One could also introduce a full printf() or equivalent function here. 
+That would ease debugging greatly, as my writeline only prints chars, not integers. I chose to do implement my own printf just for own. That was quite a pain, to put it mildly.
+
+I started needing some C functions around this point, so I implemented memcpy, strcpy and others.
+
+For keyboard input to work, interrupts are needed. For them to work, interrupt descriptor table (IDT) needs to 
+work. For it to work, Global descriptor table (GDT) needs to work. Thus, init GDT, IDT and interrupts first. Initializing them is x86 specific, which means there's really only a few different ways one can do it. I chose to rely on some osdev tutorials for sample code.
+
+Somewhere around here I realized the linker of TCC seems to be quite limited and flushing the GDT table didn't work. Thus, I changed the kernel compiler to GCC.
+
+The keyboard driver needed an abstraction for keymap. Also, shift and alt gr "layers" needed to be done separately. Debugging was a bit difficult since on X alt gr doesn't register. Thus, booting the OS on a real machine for testing the keyboard was needed. Scancode selection and  make & break codes contributed to a basic keyboard driver.
+
+
+Step 3 - hard drive and file system
+===================================
+The purpose of an operating system, to me at least, is to enable programs to run. The first steps for that is being a$
+
+Low level read-only ATA is simple. It only needs to read a block from a specified address / location. For that to hap$
+
+The file system driver needs to be able to find files based on a path and load them.
 
