@@ -8,8 +8,10 @@
 #include "ata.h"
 
 void los_reboot();
+void panic(const char *fmt, ...);
+
 /* http://www.gnu.org/software/grub/manual/multiboot/multiboot.html */
-/* The Multiboot information. Not complete, only the parts we care about 
+/* The Multiboot information. Not complete, only the parts we care about
 */
 struct multiboot_info bootinfo;
 
@@ -28,7 +30,6 @@ init_keyboard();
 init_ata();
 
 printf("%s booted and ready to go!\n", CODENAME);
-//__asm__ __volatile__ ("int $0x4");
 
 while(1) { __asm__ __volatile__ ("hlt"::);}
 
@@ -58,3 +59,25 @@ while (true)
 /* send the reset signal */
 outb(KEYB_CONTROL, 0xFE);
 }
+
+/* something has gone horribly wrong, or you don't have the means to recover from a nonfatal error */
+
+// use panic("Some error somewhere %d\n",ERRORCODE);
+
+/* TODO:
+MAKE FORMATTED OUTPUT WORK!
+fancy color background,
+a #defined list of errors,
+enable rebooting */
+void panic(const char *fmt, ...)
+{
+/* clear interrupts so we won't in trouble */
+__asm__ __volatile__ ("cli");
+
+printf("KERNEL PANIC, SYSTEM HALTED\n");
+printf("Error message: ");
+printf(fmt);
+while(1) { __asm__ __volatile__ ("hlt"::);}
+}
+
+
