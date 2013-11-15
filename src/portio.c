@@ -1,16 +1,10 @@
-/* syscalls.c
-* Mainly from Bran's kernel development tutorial, will be replaced later 
-* includes LetkuOS syscalls
+/*
+* portio.c
+* read/write bytes, words or number of words to/from hardware registers.
+* should be self explanatory, except for in16s, which could be named inwn for "in words (n)"
 */
 
 
-#include "letkuos-common.h"
-
-/* changed the loop from for in bkerndev
-to while, no reason but liking whiles */
-
-
-/* these two used for reading and writing ports */
 unsigned char inb (unsigned short _port)
 {
     unsigned char rv;
@@ -36,6 +30,15 @@ int in16s(unsigned short port, int count, unsigned char *buf) {
 __asm__ volatile("rep insw" : "=c"(count), "=D"(buf) : "d"(port), "0"(count), "1"(buf) : "memory");
 return 1;
 }
+
+
+unsigned int inw(unsigned short _port)
+{
+unsigned short rv;
+__asm__ __volatile__ ("inw %1,%0": "=a" (rv) : "dN"(_port));
+return rv;
+}
+
 /* msbtolsb takes a char string[6] = "214365" and changes the byte order to "123456" */
 /* usefel when you use in16s or something similar to read MSB data to a struct or char array */
 /*
@@ -57,13 +60,5 @@ for (i = 0; i < count / 2; i++)
         *ptr = tmp;
         ptr++;
         }
-}
-
-
-unsigned int inw(unsigned short _port)
-{
-unsigned short rv;
-__asm__ __volatile__ ("inw %1,%0": "=a" (rv) : "dN"(_port));
-return rv;
 }
 
