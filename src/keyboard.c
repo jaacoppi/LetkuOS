@@ -12,61 +12,63 @@ and from Acess2 */
 #include "stdio.h"
 #include "letkuos-common.h"
 
-/* TODO: keyboard init should be done before irq_install_handler: poll the keyboard, don't use interrupts */
-int ps2_control_byte = 1; /* a lousy way to code reading ps2 control byte */
-int keyb_keyup = 0;
 
 #define KEYB_CONTROL_CONFIG_BYTE_READ 0x20
 #define KEYB_CONTROL_CONFIG_BYTE_WRITE 0x60
+/* make sure we use scan code set 2 */
+#define KEYB_SCANCODE_CMD 0xF0
+#define KEYB_SCANCODE_SET2 0x4 /* set bit 2 to 1 if you want scancode set 2 */
+
 
 void keyboard_handler(struct registers *r);
 extern void los_reboot();
 extern char keymap_fi[3][256];
 int layer = 0; /* shift = layer1, alt = layer2 */
-
-void init_keyboard() {
-/* configure the IRQ handler */
-irq_install_handler(1, keyboard_handler);
+int keyb_keyup = 0; /* controls shift and alt */
 
 /* init the keyboard */
+void init_keyboard() {
+/* TODO: see if you need to flush the input buffer with inb calls after outb to clear ACKs and other return values */
 /* TODO: Basic Assurance Self Test and other inits to make sure the keyboard is actually connected */
+unsigned char recbyte;
+/* reset keyboard - test if it exists and works */
+outb(KEYB_CONTROL,KEYB_SELFTEST);
+recbyte = inb(KEYB_DATA);
 
-/* TODO: keyboard init should be done before irq_install_handler: poll the keyboard, don't use interrupts */
-/* make sure we use scan code set 2 */
-#define KEYB_SCANCODE_CMD 0xF0
-#define KEYB_SCANCODE_SET2 0x4 /* set bit 2 to 1 if you want scancode set 2 */
+if (recbyte != KEYB_SELFTESTOK) /* self test failed */
+	{
+	panic("Keyboard self test failed!\n");
+	return;
+	}
 
 /* read the ps2 control byte */
 outb(KEYB_CONTROL, KEYB_CONTROL_CONFIG_BYTE_READ);
+recbyte = inb(KEYB_DATA);
 
-/* use scancode set 2 */
+/* write the control after xor'ing (=toggling) the translation bit */
+recbyte = recbyte ^ BIT6;	/* XOR - change nothing but the translation bit */
+outb(KEYB_CONTROL, KEYB_CONTROL_CONFIG_BYTE_WRITE);
+outb(KEYB_DATA, recbyte);
+
+/* use scancode set 2. This should be default, but just in case */
 outb(KEYB_DATA, KEYB_SCANCODE_CMD);
-outb(KEYB_DATA, 1 & BIT2);
+outb(KEYB_DATA, 0x2); // docs say only BIT2 should be set for scancode set2. 0x2, however, is BIT1. Strange
 
-//i = inb(KEYB_DATA);
-//printf("scancode here: 0x%xh\n",i);
-
-//outb(KEYB_DATA, KEYB_SCANCODE_SET2);
-
+/* configure the IRQ handler. This should be the last call so we can safely init the keyboard first without needing to worry about interrupts */
+irq_install_handler(1, keyboard_handler);
 }
 
 
 /* Handles the keyboard interrupt */
 void keyboard_handler(struct registers *r)
 {
-/*
-keypress = make code
-key release = break code
-
-break code seems to be make code + 0x80h
-most shift keys seem to be 
-*/
+/* NOTE: keypress = make code, key release / keyup = break code */
 
 unsigned char scancode;
 /* Read from the keyboard's data buffer */
 scancode = inb(KEYB_DATA);
 
-/* the scancode (and the next one) is a key up code - do nothing */
+/* this scancode means that the next one) is a key up code - do nothing this time */
 if (scancode == KEYB_BREAK_CODE)
 	{
 	keyb_keyup = 1;
@@ -94,26 +96,8 @@ if (scancode == KEY_LS)
 if (scancode == KEYB_CTRL_ACK) /* this scancode is an ack from the previous command */
 	return;
 
-
-/* used to disable scancode translation. TODO: poll in init before enabling keyboard IRQ */
-if (ps2_control_byte)
-	{
-	/*
-	send the CONTROL_CONFIG_BYTE as 0000 0101 - basically disables port clock and translation
-	TODO: figure out what port clock does
-	*/
-	outb(KEYB_CONTROL, KEYB_CONTROL_CONFIG_BYTE_WRITE);
-	outb(KEYB_DATA, 5); /* 0000 0101 */ 
-	ps2_control_byte = 0;
-	return;
-	}
-
-	/* hardware reset */
-	if (scancode == KEY_F12)
-		los_reboot();
-
- 	/* else, sent the keycode to the actual keyboard driver */
-		scancode_handler(scancode);
+/* else, sent the keycode to the actual keyboard driver */
+	scancode_handler(scancode);
 }
 
 
@@ -121,7 +105,20 @@ if (ps2_control_byte)
 
 void scancode_handler (unsigned char scancode)
 {
-printf("scancode: 0x%xh, key: %c\n",scancode, keymap_fi[layer][scancode]);
-//printf("here: %d\n",scancode);
+/* for debug purposes: a keypress does something */
+switch (keymap_fi[layer][scancode])
+	{
+	case KEY_F12: /* software reset */
+		los_reboot();
+		break;
+	case '1':
+		cls();
+		break;
+	case '2':
+//		TODO: do something, maybe parse the mbr();
+		break;
+	default:
+		printf("scancode: 0x%xh, key: %c\n",scancode, keymap_fi[layer][scancode]);
+	}
 }
 
