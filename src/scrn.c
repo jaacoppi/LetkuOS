@@ -44,6 +44,11 @@ for (i = 0; i < 25; i++)
 		temp_ptr = (vga_memptr + (i*80) + j );
 		*temp_ptr = ' '| blank << 8; /* << 8 means we push the attribute byte into the short */
 		}
+
+/* move the cursor to upper left corner so the next line will start "from the beginning" */
+vga_cursorx = 0;
+vga_cursory = 0;
+
 return 1;
 }
 
