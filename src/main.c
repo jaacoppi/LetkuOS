@@ -6,6 +6,7 @@
 #include "keyboard.h"
 #include "portio.h"
 #include "ata.h"
+#include "fs.h"
 
 void los_reboot();
 void panic(const char *fmt, ...);
@@ -28,6 +29,7 @@ init_idt();
 init_irq();
 init_keyboard();
 init_ata();
+init_vfs();
 
 printf("%s booted and ready to go!\n", CODENAME);
 

@@ -10,28 +10,6 @@
 #include "portio.h"
 #include "string.h"
 
-/* TODO: document the reasoning of this struct. Does it come from MBR or somewhere else? */
-/* struct hd only support 4 hds and 4 partitions on each hd */
-struct hd {
-int exists;
-int ordinal; // hda = 0, hdd = 3
-        struct partition {
-        int exists;
-        int ordinal;
-        char label[12]; // FS Label
-        int bootable;   // bootable flag 0x80
-        int shead;      // starting head
-        int ssect;      // starting sector
-        int scyl;       // starting cylinder
-        int sysid;      // SysID (partition type)
-        int ehead;      // ending head
-        int esect;      // ending sector
-        int ecyl;       // ending cylinder
-        int relsect;    // relative sector = start of partition TODO rename
-        int totsect;    // total sectors in the partition
-        } a, b, c, d;
-};
-
 /* this driver is limited to 4 primary partitions. They're called hda-hdd, linux style */
 struct hd hda, hdb, hdc, hdd;
 
@@ -64,9 +42,9 @@ irq_install_handler(15, ata_handler);
 
 /* this driver is limited to master drive on 1st bus */
 check_ata_exists(ATA_PRI_DATAPORT, MASTER_HD, &hda);
-check_ata_exists(ATA_PRI_DATAPORT, SLAVE_HD, &hda);
-check_ata_exists(ATA_SEC_DATAPORT, MASTER_HD, &hda);
-check_ata_exists(ATA_SEC_DATAPORT, SLAVE_HD, &hda);
+check_ata_exists(ATA_PRI_DATAPORT, SLAVE_HD, &hdb);
+check_ata_exists(ATA_SEC_DATAPORT, MASTER_HD, &hdc);
+check_ata_exists(ATA_SEC_DATAPORT, SLAVE_HD, &hdd);
 
 }
 
@@ -157,6 +135,8 @@ else
 		printf(" slave bus");
 	printf(" model %s, serial %s\n", ata_id.modelnum, ata_id.sernum);
 	}
+
+
 return;
 }
 
@@ -176,6 +156,7 @@ if (helpsec & ATA_STATUS_ERR)
 
 
 /* choose which driver to send future commands to: dataport = 1st / 2nd controller, drivesel = master/slave */
+/* TODO: the relationship between ata_drsel and ata_readblock should be defined carefully */
 int ata_drsel(int controlsel, int drivesel)
 {
 /* always refer to ata_dataport and mastersel */
@@ -216,3 +197,32 @@ int i = inb(port);
 
 return i;
 }
+
+/* ata_readblock reads the block (sector) lba_address from hd pointed to by globals ata_dataport, ata_mastersel) */
+unsigned char *ata_readblock(int lba_address)
+{
+/* TODO: should you check for ATA DRQ / BUSY with ata_outb? */
+outb(ata_dataport + ATA_FEATURES, 0x00); // null byte
+outb(ata_dataport + ATA_SCOUNT, 0x01);  // sector count to be read
+outb(ata_dataport + ATA_ADDR, lba_address ); /* cylinder lowest byte */
+outb(ata_dataport + ATA_ADDR8, lba_address >> 8 ); /* cylinder low byte */
+outb(ata_dataport  + ATA_ADDR16, lba_address >> 16); /* cylinder high byte */
+
+/* the last 4 bytes of lba_address depend on the drive (master/slave) */
+if (ata_mastersel == MASTER_HD)
+        outb(ata_dataport + ATA_DRSEL, 0xE0 | (ata_mastersel << 4) | (lba_address >> 24));
+else /* SLAVE_HD */
+        outb(ata_dataport + ATA_DRSEL, 0xF0 | (ata_mastersel << 4) | (lba_address >> 24));
+
+outb(ata_dataport + ATA_CMDSTATUS,0x20); /* send a read command */
+
+/* wait for the drive to have something to deliver */
+while (!(inb(ata_dataport + ATA_CMDSTATUS) & ATA_STATUS_DRQ)) {};
+
+// Read the whole sector from disk into buffer
+unsigned char buffer[512];
+in16s(ata_dataport, (512 / 2), buffer);
+unsigned char *ptr = buffer;
+return ptr;
+}
+

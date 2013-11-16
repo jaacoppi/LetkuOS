@@ -2,7 +2,7 @@
 #define _letkuos_ata_h _letkuos_ata_h
 
 /* ATA identify struct and other info can be found from the specification
-http://www.t13.org/documents/UploadedDocuments/docs2006/D1699r3f-ATA8-ACS.pdf 
+http://www.t13.org/documents/UploadedDocuments/docs2006/D1699r3f-ATA8-ACS.pdf
 (table 21, section 7.16)
 */
 
@@ -10,7 +10,8 @@ http://www.t13.org/documents/UploadedDocuments/docs2006/D1699r3f-ATA8-ACS.pdf
 /* used info from http://wiki.osdev.org/ATA_PIO_Mode */
 
 void init_ata();
-char *readblock(int lba_address);
+unsigned char *ata_readblock(int lba_address);
+int ata_drsel(int controlsel, int drsel);
 extern struct hd hda, hdb, hdc, hdd; /* these are our hard drives */
 
 /* from exclaim-0.2.1, thanks for explaing bits and hexes */
@@ -45,7 +46,7 @@ extern struct hd hda, hdb, hdc, hdd; /* these are our hard drives */
 #define ATA_CMDSTATUS           0x007
 #define ATA_DCREG               0x206
 
-/* sent to ATA_DRSEL to choose master or slave drive on 1st or 2nd controller*/ 
+/* sent to ATA_DRSEL to choose master or slave drive on 1st or 2nd controller*/
 #define MASTER_HD 		0x0A0
 #define SLAVE_HD 		0x0B0
 
@@ -64,5 +65,35 @@ maximum value that shall be placed in this field is 0FFF_FFFFh. */
 /* TODO: find out the meaning of logical sectors - it seems that it doesn't mean the hard drive size */
 	unsigned short ignore4[194]; /* words 62-127 */
 } __attribute__ ((packed));
+
+/* this struct holds the hd and partition table entries.
+hd.exists = whether the hd is present (no CDROM etc support yet)
+hd.ordinal = ordinal number used (or not) to separate partitions
+struct partition holds the partition information. This loosely follows the 16 bit partition entry format, but not fully. */
+
+/* struct hd only support 4 hds and 4 partitions on each hd */
+struct hd {
+int exists;
+int ordinal; // hda = 0, hdd = 3
+        struct partition { // partitions 1-4
+	// this is the 16-bit partition entry. TODO: make sure the data types are correct
+        unsigned char bootable;   // bootable flag 0x80
+	// next 3 bytes = chs address of first absolute sector in this partition
+        unsigned char shead;      // starting head
+        unsigned char ssect;      // starting sector (bits5-0), and cyl high bytes 9-8 -> bits7-8
+        unsigned char scyl;       // starting cylinder, bits  7-0
+        unsigned char sysid;      // SysID (partition type), from 16-bit partition entry
+	// next 3 bytes = chs address of last absolute sector in this partition
+        unsigned char ehead;      // ending head, see format above
+        unsigned char esect;      // ending sector, see format above
+        unsigned char ecyl;       // ending cylinder, see format above
+        unsigned int lba_start;   // LBA of first absolute sector, 4 bytes
+        unsigned int totsect;    // total sectors in the partition, 4 bytes
+	// there are extra fields used by the kernel
+        int exists;
+        char label[12]; // FS Label from FAT driver
+        } part[3];
+};
+
 
 #endif
