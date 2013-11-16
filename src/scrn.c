@@ -66,6 +66,11 @@ switch (ch)
 		vga_cursorx = 0;
 		vga_cursory++;
 		break;
+
+	/* tab */
+	case '\t':
+		vga_cursorx = vga_cursorx + 8;
+		break;
 	default:
 		break;
 	}
@@ -90,7 +95,7 @@ if (ch != '\n')
 	vga_cursorx++;
 
 /* start a new line for the virtual cursor if needed */
-if (vga_cursorx == 80)
+if (vga_cursorx >= 80) // must be >= 80 to account for a \t
 	{
 	vga_cursory++;
 	vga_cursorx = 0;
