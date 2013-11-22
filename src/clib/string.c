@@ -1,4 +1,5 @@
 /* string.c */
+#include "string.h"
 
 short *memsetw(short *dest, short val, int count)
 {
@@ -36,5 +37,34 @@ void * memcpy(void *dest, const void *src, int count)
     char *dp = (char *)dest;
     for(; count != 0; count--) *dp++ = *sp++;
     return dest;
+}
+
+char *strstr(char *s1, const char *s2)
+{
+    int len = strlen(s2);
+    while(*s1)
+        if(!memcmp(s1++,s2,len))
+            return s1 -1;
+    return 0;
+}
+
+int memcmp(const void* s1, const void* s2,int len)
+{
+    const unsigned char *p1 = s1, *p2 = s2;
+    while(len--)
+        if( *p1 != *p2 )
+            return *p1 - *p2;
+        else
+            *p1++,*p2++; // gives a "value computed not used" error from GCC. what can we do? 
+    return 0;
+}
+
+int strlen(const char *str)
+{
+    int retval;
+    for(retval = 0; *str != '\0'; str++)
+        retval++;
+
+    return retval;
 }
 

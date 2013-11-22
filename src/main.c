@@ -7,13 +7,13 @@
 #include "portio.h"
 #include "ata.h"
 #include "fs.h"
+#include "string.h"
 
 void los_reboot();
 void panic(const char *fmt, ...);
 
 /* http://www.gnu.org/software/grub/manual/multiboot/multiboot.html */
-/* The Multiboot information. Not complete, only the parts we care about
-*/
+/* The Multiboot information. Not complete, only the parts we care about */
 struct multiboot_info bootinfo;
 
 //////////////////////////////////////////////////////
@@ -21,7 +21,20 @@ struct multiboot_info bootinfo;
 //////////////////////////////////////////////////////
 int main(struct multiboot_info *boot_info, int magic) {
 
-init_video();
+init_video(); /* init the video device first so printf and others work for panic() */
+
+/* see if the multiboot magic number is set correctly. If not, we're not sure we can trust the boot_info */
+if (magic == MULTIBOOT_MAGIC)
+	{
+	bootinfo = *boot_info;
+	/* complain about missing rootdevice boot parm in fs.c */
+	}
+else
+	{
+	printf("The multiboot magic number given by bootloader is: %x\n",magic);
+	panic("No valid multiboot magic number found.\n");
+	}
+
 printf("%s (build %s)\n",CODENAME, REVID);
 printf("%s\n", COPYRIGHT);
 init_gdt();

@@ -1,5 +1,8 @@
 #ifndef _LETKUOS_multiboot_h
 #define _LETKUOS_multiboot_h _LETKUOS_multiboot_h
+
+#define MULTIBOOT_MAGIC 0x2BADB002	// the magic header from bootloader to kernel
+
      /* The Multiboot header. */
      typedef struct multiboot_header
      {
