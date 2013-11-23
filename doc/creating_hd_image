@@ -1,0 +1,16 @@
+The steps to create a FAT32 file system disk image that boots with grub legacy:
+1. bximage -> flat hd, 100 megs
+2. fdisk -u -C203 -S63 -H16 c.img, press -> o -> n -> a -> t 0C -> w
+
+3. note geometry from fdisk:
+c.img1   *        2048      204623      101288   83  W95 LBA
+
+3. format it as a loopback device
+losetup -o1048576 /dev/loop0 c.img # 1048576 equals to 2048*512
+mkdosfs -F32 /dev/loop0 
+
+4. boot systemrescuecd or some other linux live cd together with newly created c.img:
+% mount /dev/sda1 /mnt
+% grub-install --no-floppy --root-directory=/mnt /dev/sda
+
+5. you're done. Copy a proper menu.lst and the kernel image to the disk image
