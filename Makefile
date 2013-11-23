@@ -50,7 +50,7 @@ $(OBJECTS): $(SOURCES) #$(INCLUDES)
 
 install: all
 	@echo "Needing root access for loopdevice.."
-	@sudo mount -tvfat -oloop=$(LOOPDEVICE),offset=32256 $(HDIMAGE) $(MOUNTPOINT)
+	@sudo mount -tvfat -oloop=$(LOOPDEVICE),offset=1048576 $(HDIMAGE) $(MOUNTPOINT)
 	@sudo cp $(KERNELBIN) $(MOUNTPOINT)/boot/$(KERNELBIN)
 	@sudo umount $(MOUNTPOINT)
 	@echo Kernel image saved to $(HDIMAGE)

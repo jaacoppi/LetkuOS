@@ -1,7 +1,6 @@
 display_library: term
-#display_library: x
-ata0-master: type=disk, path=LetkuOS.img, mode=flat, cylinders=10, heads=16, spt=63
+#display_library: sdl
+ata0-master: type=disk, path=LetkuOS.img, mode=flat, cylinders=203, heads=16, spt=63
 log: testing/bochs.log
 boot:disk
-megs:256
-#boot:cdrom
+megs:16
