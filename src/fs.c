@@ -4,12 +4,12 @@ scan partitions
 
 #include "stdio.h"
 #include "ata.h"
-#include "errors.h"
 #include "fs.h"
+#include "fat.h"
 #include "string.h"
 #include "letkuos-common.h"
 
-extern struct hd hda, hdb, hdc, hdd; /* these are our hard drives */
+extern struct hd drive[3]; // these are our hard drives
 void partition_scan(struct hd *drive);
 char *partition_types[];
 
@@ -18,11 +18,12 @@ char *partition_types[];
 int init_vfs()
 {
 /* TODO: scan all drives */
-if (hda.exists == 1)
+if (drive[0].exists == 1)
 	{
 	/* needed for readblock to function. Should figure out this mess, maybe readblock should take these parameters? */
 	ata_drsel(ATA_PRI_DATAPORT, MASTER_HD);
-	partition_scan(&hda);
+	partition_scan(&drive[0]);
+	fat_scan(&drive[0].part[0]);
 	}
 
 return 1;
@@ -38,7 +39,7 @@ unsigned char *mbrbuffer = ata_readblock(0);
 if (mbrbuffer[MBR_BOOTSIG_LOC] != MBR_BOOTSIG1 && mbrbuffer[MBR_BOOTSIG_LOC+1] != MBR_BOOTSIG2)
 	panic("No valid MBR found on the drive!\n");
 else
-	printf("Found an MBR!\n");
+	printf("Found an MBR on the drive, all good!\n");
 
 /* scan the partitions and fill the structs one by one */
 
@@ -46,31 +47,26 @@ int i = 0 ;
 for (mbrbuffer = mbrbuffer + MBR_PART1; i <= 3; i++) // point the buffer to the first 16-byte partition and loop
 	{
 	/* memcpy the struct, check somewhere if exists or not */
-	struct partition *ptr;
-	ptr = &drive->part[i];
-	memcpy((void *)ptr, mbrbuffer, 16);
-	// if there's a starting head, the partition exists - is there a better way to check it?
-	if (drive->part[i].shead != 0)
+	memcpy(&drive->part[i], mbrbuffer, 16);
+
+	// if there's a sysid, the partition exists.. Is there a better way to check it?
+	if (drive->part[i].sysid != 0)
 		drive->part[i].exists = true;
 	else
 		drive->part[i].exists = false;
  	mbrbuffer = mbrbuffer + 16; /* point the buffer to the beginning of next partition */
 	}
-
-printf("Partition info for drive: %d\n", drive->ordinal);
 for (i = 0; i <= 3; i++)
 	{
 	if (drive->part[i].exists)
 		{
-		printf("Partition #%d\n",i);
+		printf("I think we found a partition #%d..\n",i);
 		printf("\tBootable: 0x%x\n",drive->part[i].bootable);
 		printf("\tSysid: %s\n", partition_types[(int) drive->part[i].sysid]);
 		printf("\tLBA sector start: %d\n",drive->part[i].lba_start);
 		printf("\tTotal sectors in partition: %d\n",drive->part[i].totsect);
 		printf("\t..thus, size of partition: %dkB\n",drive->part[i].totsect*512/1024);
 		}
-	else
-		printf("No partition #%d\n",i);
 	}
 }
 

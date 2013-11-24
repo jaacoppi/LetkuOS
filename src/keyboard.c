@@ -12,6 +12,7 @@ and from Acess2 */
 #include "stdio.h"
 #include "letkuos-common.h"
 #include "errors.h"
+#include "fat.h"
 
 #define KEYB_CONTROL_CONFIG_BYTE_READ 0x20
 #define KEYB_CONTROL_CONFIG_BYTE_WRITE 0x60
@@ -115,7 +116,11 @@ switch (keymap_fi[layer][scancode])
 		cls();
 		break;
 	case '2':
-//		TODO: do something, maybe parse the mbr();
+		fat_readdir(3); // rootdevice.rootcluster == 2
+		break;
+
+	case '3':
+		debug_showfat(0);
 		break;
 	default:
 		printf("scancode: 0x%xh, key: %c\n",scancode, keymap_fi[layer][scancode]);

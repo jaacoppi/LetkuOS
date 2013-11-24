@@ -12,7 +12,7 @@ http://www.t13.org/documents/UploadedDocuments/docs2006/D1699r3f-ATA8-ACS.pdf
 void init_ata();
 unsigned char *ata_readblock(int lba_address);
 int ata_drsel(int controlsel, int drsel);
-extern struct hd hda, hdb, hdc, hdd; /* these are our hard drives */
+//extern struct hd drive[3]; /* these are our hard drives */
 
 /* from exclaim-0.2.1, thanks for explaing bits and hexes */
 #define ATA_CHECK_ERROR         0
@@ -68,13 +68,11 @@ maximum value that shall be placed in this field is 0FFF_FFFFh. */
 
 /* this struct holds the hd and partition table entries.
 hd.exists = whether the hd is present (no CDROM etc support yet)
-hd.ordinal = ordinal number used (or not) to separate partitions
 struct partition holds the partition information. This loosely follows the 16 bit partition entry format, but not fully. */
 
 /* struct hd only support 4 hds and 4 partitions on each hd */
 struct hd {
 int exists;
-int ordinal; // hda = 0, hdd = 3
         struct partition { // partitions 1-4
 	// this is the 16-bit partition entry. TODO: make sure the data types are correct
         unsigned char bootable;   // bootable flag 0x80
@@ -93,7 +91,5 @@ int ordinal; // hda = 0, hdd = 3
         int exists;
         char label[12]; // FS Label from FAT driver
         } part[3];
-};
-
-
+} drive[3];
 #endif

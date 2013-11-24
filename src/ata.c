@@ -41,10 +41,10 @@ irq_install_handler(14, ata_handler);
 irq_install_handler(15, ata_handler);
 
 /* this driver is limited to master drive on 1st bus */
-check_ata_exists(ATA_PRI_DATAPORT, MASTER_HD, &hda);
-check_ata_exists(ATA_PRI_DATAPORT, SLAVE_HD, &hdb);
-check_ata_exists(ATA_SEC_DATAPORT, MASTER_HD, &hdc);
-check_ata_exists(ATA_SEC_DATAPORT, SLAVE_HD, &hdd);
+check_ata_exists(ATA_PRI_DATAPORT, MASTER_HD, &drive[0]);
+check_ata_exists(ATA_PRI_DATAPORT, SLAVE_HD, &drive[1]);
+check_ata_exists(ATA_SEC_DATAPORT, MASTER_HD, &drive[2]);
+check_ata_exists(ATA_SEC_DATAPORT, SLAVE_HD, &drive[3]);
 
 }
 
@@ -122,7 +122,7 @@ else
 
 	harddrive->exists = true;
 	/* print some debug info */
-	printf("found an ATA driver on ");
+	printf("ATA driver found: ");
 	if (controlsel == ATA_PRI_DATAPORT)
 		printf("1st");
 	else
