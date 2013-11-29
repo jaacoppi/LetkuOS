@@ -11,6 +11,7 @@
 /* LetkuOS currently supports 1 partition only. The FAT Boot Record of this partition is stored in rootdevice */
 struct fat32_BS rootdevice;
 
+int debug = 0;
 
 /* fat_scan is similiar to partition_scan - populate to structs */
 /* should be run once at boot time for rootdevice */
@@ -20,13 +21,9 @@ void fat_scan(struct partition *part) {
 // TODO: make sure ata_drsel is correct
 // TODO: link fat32_BS *fatptr to drive and part?
 // TODO: is this the correct way to use pointers..?
-//TODO: memcpyfrom fatptr to rootdevice
-//struct fat32_BS *fatptr = &rootdevice;
 unsigned char *fatptr;
 fatptr = ata_readblock(part->lba_start);
 memcpy ((void *) &rootdevice, (void *)fatptr, sizeof(rootdevice));
-//printf("0 for floppies (FAT12) %x\n",rootdevice.signature[0]);
-//printf("29 for FAT12: %x\n",rootdevice.signature[2]);
 
 if (rootdevice.boot_signature != 0x29 && rootdevice.boot_signature != 0x28)
 	{
@@ -61,7 +58,7 @@ return;
 int fat_readdir(int cluster) {
 
 // table holds info about one file at a time. Could also be table[16] and no memcpy in for loop??
-struct dir_struct *table;
+struct dir_struct *table = NULL;
 
 // convert the relative cluster used internally by FAT to an absolute sector used by ATA.
 // from http://www.pjrc.com/tech/8051/ide/fat32.html
@@ -71,8 +68,8 @@ struct dir_struct *table;
 cluster = drive[0].part[0].lba_start + rootdevice.reserved_sector_count + (rootdevice.FAT_count * rootdevice.sectors_per_fat) + ((cluster -2) * rootdevice.sectors_per_cluster);
 
 // Then, read the sector from disk
-
-unsigned char *fatbuffer = ata_readblock(cluster);
+unsigned char *fatbuffer;
+fatbuffer  = ata_readblock(cluster);
 
 printf("showing files in directory, sector %d\n",cluster);
 // for < 16 'cos sector/tablesize = 512/32 = 16. 16 entries in one sector
@@ -124,7 +121,7 @@ for (i = 0; i < 16; i++)
 		}
 
 	// else, it's a proper file, print it:
-	printf("File #%d %s",i,table->file_name);
+	printf("File #%d %s, size %d",i,table->file_name, table->file_size);
 	if (table->file_attr & FAT_ATTR_directory)
 		printf("<DIR>");
 	else
@@ -138,7 +135,6 @@ for (i = 0; i < 16; i++)
 
 
 	}
-
 /* TODO: instead of printing the files, return the table for processing in other functions - findfile etc */
 return 1;
 }
@@ -147,7 +143,55 @@ return 1;
 
 
 
-int debug_showfat(int fatpage) {
+//////////////////////////////////////////////////////////////////////
+// only for debugging the fat table, no real function in the kernel
+// displays a cluster "fat_offset" in a fat table
+//////////////////////////////////////////////////////////////////////
+
+int debug_showfat(int fatpage) { // fatpage means which page of FAT we will read
+
+//  rootdevice is a FAT struct, so it stores info in relative form. It gives us the ABSOLUTE sector of the FAT by..
+
+//   The first data sector (that is, the first sector in which directories and files may be stored):
+// currently fatpage is static:
+// TODO: find out where the FAT actually resides. Should it be the Boot record +1 ?
+printf("first fat in %d\n",rootdevice.reserved_sector_count);
+fatpage =  (rootdevice.reserved_sector_count);
+
+
+unsigned char *clusterbuffer  = ata_readblock(drive[0].part[0].lba_start + fatpage);
+unsigned char fatbuffer[512] = "";
+memcpy ((void *) fatbuffer, clusterbuffer, 512);
+// print the FAT for debug purposes. This can be used to manually follow chains
+printf("0000 0001 0002 0003 0004 0005 0006 0007 0008 0009 000A 000B 000C 000D 000E 000F\n");
+printf("------------------------------------------------------------------------------\n");
+
+int h = 0;
+for (h = 0; h < 512; h = h +4) // 128, since each cluster takes up 32 (28) bytes?
+	{
+	// A fat32 cluster is 28 bytes. fatbuffer is 8. Thus, we need to make a dword out of a char
+	unsigned int cluster;
+	cluster =  fatbuffer[h+1]; // low byte
+	cluster = cluster <<  8;
+	cluster =  cluster + fatbuffer[h]; // low byte
+
+	cluster = cluster & 0x0FFFFFFF; // remove the 4 high bytes, thus making a 28 bit interger
+
+	// to make it human readable, add padding
+	if (cluster <= 0xFFF)
+		printf("0");
+	if (cluster <= 0xFF)
+		printf("0");
+	if (cluster <= 0x0F)
+		printf("0");
+
+
+	printf("%x ", cluster);
+        }
+
+
 return 1;
 }
+
+
 
