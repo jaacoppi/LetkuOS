@@ -43,7 +43,7 @@ int ata_drsel(int controlsel, int drsel);
 #define ATA_ADDR8               0x004	/* LBA middle byte */
 #define ATA_ADDR16              0x005	/* LBA high byte */
 #define ATA_DRSEL               0x006	/* LBA bits 24-27 map to bits 3-0 here*/
-#define ATA_CMDSTATUS           0x007
+#define ATA_CMDSTATUS           0x007	/* AKA the command port & Regular Status Port */
 #define ATA_DCREG               0x206
 
 /* sent to ATA_DRSEL to choose master or slave drive on 1st or 2nd controller*/

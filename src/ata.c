@@ -10,6 +10,8 @@
 #include "portio.h"
 #include "string.h"
 
+extern int debug;
+
 /* this driver is limited to 4 primary partitions. They're called hda-hdd, linux style */
 struct hd hda, hdb, hdc, hdd;
 
@@ -140,18 +142,23 @@ else
 return;
 }
 
-/* IRQs get handled here */
+/* IRQs for primary and secondary drive get handled here */
 void ata_handler(struct registers *r) {
-int helppri = inb(ATA_PRI_DATAPORT + ATA_CMDSTATUS);
-int helpsec = inb(ATA_SEC_DATAPORT + ATA_CMDSTATUS);
+// currently, don't use IRQs for anything, use polling to read the drive.
+// you could set nIEN in the control register for the particular controller (primary / secondary) to prevent the IRQ from firing
 
-/* The irqs from hard drives should never require any action. */
-/* TODO: print ata cmdstatus to debug output*/ 
+// Assumably the IRQ handler MUST read the regular status port. See this:
+// http://stackoverflow.com/questions/7487312/what-is-the-proper-way-to-acknowledge-an-ata-ide-interrupt"
 
-if (helppri & ATA_STATUS_ERR)
-	printf("ATA error in primary bus!\n");
-if (helpsec & ATA_STATUS_ERR)
-	printf("ATA error in secondary bus!\n");
+int statusbyte = 0;
+
+if (r->int_no == 46) // it's IRQ 14 AKA Primary bus
+	statusbyte = inb(ATA_PRI_DATAPORT + ATA_CMDSTATUS);
+
+if (r->int_no == 47) // it's IRQ 15 AKA Secondary bus
+	statusbyte = inb(ATA_SEC_DATAPORT + ATA_CMDSTATUS);
+
+return;
 }
 
 
@@ -214,13 +221,17 @@ if (ata_mastersel == MASTER_HD)
 else /* SLAVE_HD */
         outb(ata_dataport + ATA_DRSEL, 0xF0 | (ata_mastersel << 4) | (lba_address >> 24));
 
-outb(ata_dataport + ATA_CMDSTATUS,0x20); /* send a read command */
 
-/* wait for the drive to have something to deliver */
-while (!(inb(ata_dataport + ATA_CMDSTATUS) & ATA_STATUS_DRQ)) {};
+outb(ata_dataport + ATA_CMDSTATUS,ATA_READSECTORS); /* send a read command */
+
+/* wait for the drive to have something to deliver.
+We could use te IRQ for this, since the IRQ fires once the drive is ready. However, use polling for now.  */
+printf("poll\n");
+
 
 // Read the whole sector from disk into buffer
-unsigned char buffer[512];
+
+unsigned char buffer[512] = "";
 in16s(ata_dataport, (512 / 2), buffer);
 unsigned char *ptr = buffer;
 return ptr;
