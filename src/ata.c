@@ -223,10 +223,8 @@ else /* SLAVE_HD */
 
 
 outb(ata_dataport + ATA_CMDSTATUS,ATA_READSECTORS); /* send a read command */
+// at this point, the IRQ fires to tell us there's something coming.
 
-/* wait for the drive to have something to deliver.
-We could use te IRQ for this, since the IRQ fires once the drive is ready. However, use polling for now.  */
-printf("poll\n");
 
 
 // Read the whole sector from disk into buffer
