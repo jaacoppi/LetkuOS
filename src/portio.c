@@ -20,7 +20,7 @@ void outb (unsigned short _port, unsigned char _data)
 /* in16s used for reading x amount of words: use 512/2 as a count to read 512 bytes */
 /*
 can be used like this:
-unsigned char buffer;
+unsigned char buffer[512];
 in16s(port, (512 / 2), buffer);
 unsigned char *ptr = buffer;
 return ptr;

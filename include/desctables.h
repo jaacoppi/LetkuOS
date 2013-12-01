@@ -1,7 +1,7 @@
 /* desctables.h - declarations for GDT and IDT */
-#define NUM_IDT 47
 #ifndef _letkuos_desctables_h
 #define _letkuos_desctables_h _letkuos_desctables_h
+#define NUM_IDT 47
 
 int init_gdt();
 /* Some code copied from:

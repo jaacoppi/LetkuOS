@@ -45,7 +45,6 @@ char *exception_messages[] =
 
 
 // This gets called from our ASM interrupt handler stub.
-/* TODO: write a function to write numbers - printf? */
 void isr_handler(registers_t regs)
 {
 printf("received interrupt: ");
@@ -53,7 +52,7 @@ printf("received interrupt: ");
 switch (regs.int_no)
         {
         default:
-                printf("%s\n", exception_messages[regs.int_no]); /* TODO: decimal, not string */
+                printf("%s\n", exception_messages[regs.int_no]);
 
 
         }
