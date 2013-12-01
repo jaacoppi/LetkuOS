@@ -48,8 +48,8 @@ check_ata_exists(ATA_PRI_DATAPORT, SLAVE_HD, &drive[1]);
 
 // we won't get past this with QEMU because it double faults on an unknown drive..
 // either correct this problem or comment out these lines for QEMU
-check_ata_exists(ATA_SEC_DATAPORT, MASTER_HD, &drive[2]);
-check_ata_exists(ATA_SEC_DATAPORT, SLAVE_HD, &drive[3]);
+//check_ata_exists(ATA_SEC_DATAPORT, MASTER_HD, &drive[2]);
+//check_ata_exists(ATA_SEC_DATAPORT, SLAVE_HD, &drive[3]);
 }
 
 //////////////////////////////////////////////////////
@@ -65,7 +65,16 @@ void check_ata_exists(int controlsel, int drivesel, struct hd *harddrive)
 /* after ata_drsel, all outb and inb are done to this specific drive */
 ata_drsel(controlsel, drivesel);
 
-// This is a dummy test that checks if the drive exists: write some values somewhere and read them back
+// first test to see if the drive exists
+// EXECUTE DEVICE DIAGNOSTICS. Returns 0x01 if the drive in question exists
+ata_outb(ata_dataport + ATA_CMDSTATUS, ATA_EXEC_DEV_DIAG);
+if (ata_inb(ata_dataport + ATA_STATUS_ERR) != 0x01)
+		{
+		harddrive->exists = false;
+		return;
+		}
+
+// second test to seeif the drive exists: write some values somewhere and read them back
 // note that this might not be a valid check to all drives; works on bochs but not on qemu
 ata_outb(ata_dataport + ATA_ADDR, 0x55);
 ata_outb(ata_dataport + ATA_ADDR8, 0xAA);
@@ -154,7 +163,6 @@ if (ata_inb(ata_dataport + ATA_CMDSTATUS) != 0)
 else	// the drive does not exists according to IDENTIFY DEVICE command
 	{
 	harddrive->exists = false;
-	printf("111\n");
 	}
 return;
 }

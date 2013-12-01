@@ -10,6 +10,8 @@
 
 void fat_scan(struct partition *part);
 int fat_readdir(int sector);
+int follow_clusterchain(unsigned int cluster);
+
 int debug_showfat(int fatpage);
 /* from osdev.org wiki, adapted a bit */
 /* also from http://support.microsoft.com/kb/q140418 */

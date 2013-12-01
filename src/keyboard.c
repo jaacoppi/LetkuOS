@@ -116,7 +116,13 @@ switch (keymap_fi[layer][scancode])
 		cls();
 		break;
 	case '2':
-		fat_readdir(3); // rootdevice.rootcluster == 2
+//		fat_readdir(4); // rootdevice.rootcluster == 2
+		// the cluster that has the rest of /boot/grub is 0x010B
+		fat_readdir(0x4); // rootdevice.rootcluster == 2
+		break;
+
+	case '4':
+		follow_clusterchain(0); // rootdevice.rootcluster == 2
 		break;
 
 	case '3':

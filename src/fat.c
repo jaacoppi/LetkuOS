@@ -56,7 +56,6 @@ return;
 // read all the 16 32bit blocks in one (SECTOR or CLUSTER??)
 // basically this amounts to a directory listing of the rootdir
 int fat_readdir(int cluster) {
-
 // table holds info about one file at a time. Could also be table[16] and no memcpy in for loop??
 struct dir_struct *table = NULL;
 
@@ -141,7 +140,83 @@ return 1;
 
 
 
+//////////////////////////////////////////////////////////////////////
+// follow a cluster chain
+//////////////////////////////////////////////////////////////////////
 
+int follow_clusterchain(unsigned int cluster)
+{
+cluster =7;
+
+// setup some helper ints for calculations
+
+// cluster size means the space on disk that 1 cluster points to.
+int clustersize = rootdevice.bytes_per_sector * rootdevice.sectors_per_cluster;
+
+int lastsector = 0;
+unsigned char *clusterbuffer;
+// loop until the end of cluster chain
+int i;
+printf("for a file starting in cluster %x..",cluster);
+for (i = 1; i > 0; i++)
+	{
+	// the reasoning for fat_offset is a bit unclear.. this is what might be happening:
+	// one cluster is 32 bits. Thus, with 512 byte sectors, one cluster occupies 4 x 8 bytes (4 chars)
+	// in any case, fat_offset means the offset of the cluster from the beginning of FAT
+	unsigned int fat_offset = cluster * 4;
+
+	// find out the absolute sector of hard disk where the cluster resides
+	unsigned int sector =  drive[0].part[0].lba_start + rootdevice.reserved_sector_count + (fat_offset / clustersize);
+
+	/* for debugging -s debugfat instead of follow
+	printf("cluster here: %d\n",cluster);
+	debug_showfat(cluster - 2048 -32 );
+	return;
+	*/
+
+	// read 512 bytes from the proper hda sector
+	// only read if the sector has changed from last time. This reduces unnecessary ATA accesses
+	if (lastsector != sector)
+		{
+		lastsector = sector;
+		clusterbuffer = ata_readblock(sector);
+		}
+
+	// to read the value of the cluster we care about, use offset (in the current sector)
+	unsigned int offset = fat_offset % clustersize;
+
+	// read 28 bits to an unsigned int, taking endianndess into account
+	unsigned int table_value =  clusterbuffer[offset+1]; // low byte
+	table_value = table_value << 8;
+	table_value = table_value + clusterbuffer[offset];
+
+	//remember to ignore the high 4 bits.
+	table_value = table_value & 0x0FFFFFFF;
+	/*
+	// for debug needs, print out the value
+	printf("the value of cluster %x is ",cluster);
+
+	// to make it human readable, add padding
+	if (table_value <= 0xFFF)
+		printf("0");
+	if (table_value <= 0xFF)
+		printf("0");
+	if (table_value <= 0x0F)
+		printf("0");
+
+	printf("%x\n",table_value);
+	*/
+	// end debug
+
+	// if the value is >= 0xFFF8, it's the last cluster
+	if (table_value >= 0xFFF8)
+		break;
+	// otherwise, set cluster to the new value and continue looping
+	cluster = table_value;
+	}
+
+printf("total number of clusters: %d\n", i);
+}
 
 //////////////////////////////////////////////////////////////////////
 // only for debugging the fat table, no real function in the kernel
@@ -155,8 +230,7 @@ int debug_showfat(int fatpage) { // fatpage means which page of FAT we will read
 //   The first data sector (that is, the first sector in which directories and files may be stored):
 // currently fatpage is static:
 // TODO: find out where the FAT actually resides. Should it be the Boot record +1 ?
-printf("first fat in %d\n",rootdevice.reserved_sector_count);
-fatpage =  (rootdevice.reserved_sector_count);
+fatpage = fatpage + rootdevice.reserved_sector_count;
 
 
 unsigned char *clusterbuffer  = ata_readblock(drive[0].part[0].lba_start + fatpage);

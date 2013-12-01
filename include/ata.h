@@ -30,7 +30,7 @@ int ata_drsel(int controlsel, int drsel);
 /* commands */
 #define ATA_IDENTIFY		0xEC	/* identify command to.. idenfity the drive */
 #define ATA_READSECTORS		0x20	/* do exactly what the name says */
-
+#define ATA_EXEC_DEV_DIAG	0x90	// EXECUTE DEVICE DIAGNOSTICS. 0x01 = everything ok on this drive
 /* Dataports in absolute values */
 #define ATA_PRI_DATAPORT        0x1F0
 #define ATA_SEC_DATAPORT        0x170
