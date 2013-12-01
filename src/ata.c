@@ -45,15 +45,18 @@ irq_install_handler(15, ata_handler);
 /* this driver is limited to master drive on 1st bus */
 check_ata_exists(ATA_PRI_DATAPORT, MASTER_HD, &drive[0]);
 check_ata_exists(ATA_PRI_DATAPORT, SLAVE_HD, &drive[1]);
+
+// we won't get past this with QEMU because it double faults on an unknown drive..
+// either correct this problem or comment out these lines for QEMU
 check_ata_exists(ATA_SEC_DATAPORT, MASTER_HD, &drive[2]);
 check_ata_exists(ATA_SEC_DATAPORT, SLAVE_HD, &drive[3]);
-
 }
 
 //////////////////////////////////////////////////////
 // check_ata_exists - checks which hard drives exist
 //////////////////////////////////////////////////////
-void check_ata_exists(int controlsel, int drivesel, struct hd *harddrive) {
+void check_ata_exists(int controlsel, int drivesel, struct hd *harddrive)
+{
 
 /* use ATA IDENTIFY to see if the drive exists */
 /* see wiki.osdev.for details */
@@ -62,7 +65,23 @@ void check_ata_exists(int controlsel, int drivesel, struct hd *harddrive) {
 /* after ata_drsel, all outb and inb are done to this specific drive */
 ata_drsel(controlsel, drivesel);
 
-/* Then set the Sectorcount, LBAlo, LBAmid, and LBAhi IO ports to 0 (port 0x1F2 to 0x1F5). */
+// This is a dummy test that checks if the drive exists: write some values somewhere and read them back
+// note that this might not be a valid check to all drives; works on bochs but not on qemu
+ata_outb(ata_dataport + ATA_ADDR, 0x55);
+ata_outb(ata_dataport + ATA_ADDR8, 0xAA);
+ata_outb(ata_dataport + ATA_SCOUNT, 0xFF);
+
+if (ata_inb(ata_dataport + ATA_ADDR) != 0x55)
+	if (ata_inb(ata_dataport +ATA_ADDR8) != 0xAA)
+		if (ata_inb(ata_dataport +ATA_SCOUNT) != 0xFF)
+			{
+			harddrive->exists = false;
+			return;
+			}
+
+// the drive apparantly exists at least in bochs, continue with ATA Identify:
+
+/* Set the Sectorcount, LBAlo, LBAmid, and LBAhi IO ports to 0 (port 0x1F2 to 0x1F5). */
 ata_outb(ata_dataport + ATA_SCOUNT,0);
 ata_outb(ata_dataport + ATA_ADDR,0);
 ata_outb(ata_dataport + ATA_ADDR8,0);
@@ -70,14 +89,9 @@ ata_outb(ata_dataport + ATA_ADDR16,0);
 
 /* Then send the IDENTIFY command (0xEC) to the Command IO port (0x1F7). */
 ata_outb(ata_dataport + ATA_CMDSTATUS, ATA_IDENTIFY);
+
 /* Then read the Status port (0x1F7) again. If the value read is 0, the drive does not exist. */
-int i = ata_inb(ata_dataport + ATA_CMDSTATUS);
-if (i == 0) /* if the result is 0, this ATA drive does not exist */
-	{
-	harddrive->exists = false;
-	return;
-	}
-else
+if (ata_inb(ata_dataport + ATA_CMDSTATUS) != 0)
 	{ // the drive exists, do some more checking
 	/* Because of some ATAPI drives that do not follow spec, at this point you need to check the LBAmid and LBAhi ports
 	(0x1F4 and 0x1F5) to see if they are non-zero. If so, the drive is not ATA, and you should stop polling. */
@@ -137,8 +151,11 @@ else
 		printf(" slave bus");
 	printf(" model %s, serial %s\n", ata_id.modelnum, ata_id.sernum);
 	}
-
-
+else	// the drive does not exists according to IDENTIFY DEVICE command
+	{
+	harddrive->exists = false;
+	printf("111\n");
+	}
 return;
 }
 
@@ -172,7 +189,7 @@ ata_mastersel = drivesel;
 /* send the drive select command to choose proper master / slave */
 ata_outb(ata_dataport + ATA_DRSEL, ata_mastersel);
 /* wait until the drive is ready */
-while (inb(controlsel + ATA_CMDSTATUS)&ATA_STATUS_BSY);
+while (inb(ata_dataport + ATA_CMDSTATUS)&ATA_STATUS_BSY);
 
 return 1;
 }
