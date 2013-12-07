@@ -10,6 +10,9 @@
 
 void fat_scan(struct partition *part);
 int fat_readdir(int sector);
+unsigned int fat_parse_path(char *path);
+unsigned int fat_findcluster(char *file, unsigned int cluster);
+
 int follow_clusterchain(unsigned int cluster);
 unsigned int get_cluster_value(unsigned int cluster);
 int debug_showfat(int fatpage);

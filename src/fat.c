@@ -11,6 +11,7 @@
 /* LetkuOS currently supports 1 partition only. The FAT Boot Record of this partition is stored in rootdevice */
 struct fat32_BS rootdevice;
 
+void fat_raw_to_humanreadable(unsigned char filename[11]);
 int debug = 0;
 
 /* fat_scan is similiar to partition_scan - populate to structs */
@@ -162,8 +163,6 @@ unsigned int get_cluster_value(unsigned int cluster)
 int clustersize = rootdevice.bytes_per_sector * rootdevice.sectors_per_cluster;
 
 unsigned char *clusterbuffer;
-// loop until the end of cluster chain
-int i;
 
 // the reasoning for fat_offset is a bit unclear.. this is what might be happening:
 // one cluster is 32 bits. Thus, with 512 byte sectors, one cluster occupies 4 x 8 bytes (4 chars)
@@ -189,6 +188,139 @@ table_value = table_value & 0x0FFFFFFF;
 
 return table_value;
 }
+
+
+
+
+//////////////////////////////////////////////////////////////////////
+// parse a full path to find the correct cluster
+//////////////////////////////////////////////////////////////////////
+
+unsigned int fat_parse_path(char *path)
+{
+#define FILENAME_LEN 11 // hardcode the file system to use 8+3 format. A stupid decision..
+char pathcomponent[FILENAME_LEN] = "";
+
+// currently, only absolute path names are used. Thus, if the path doesn't begin with \, don't allow it)
+if (path[0] != '\\')
+	return -1; // function returns -1 on error
+
+path++; // skip the first "\"
+
+int i;
+unsigned int cluster = rootdevice.root_cluster; // start parsing from the root cluster
+ // loop the directory tree until the end is found
+while (true)
+	{
+	if (path == '\0')
+		break;
+
+	// this loops searchs for directories in the middle of path
+	// thus, from \boot\grub\menu.lst it finds \boot and \boot\grub, but not the last part, menu.lst
+	int c = 1;
+	for (i = 0; i < FILENAME_LEN; i++)
+		{
+		c = path[i]; // just strcmp((const char *) '\\', (const char *) path[0]) doesn't work
+		if (c == '\\')	// we found a \, there's one more dir
+			{
+			memcpy(pathcomponent, path, i); // parse the directory / file name
+			path = path + i + 1; // advance pointer to the beginning of next file (also skip trailing \)
+
+			// at this point, pathcomponent contains the directory/file we want to search
+			// find the cluster that holds the dir we want
+			printf("trying to find %s in cluster %d\n",pathcomponent, cluster);
+
+			cluster = fat_findcluster(pathcomponent, cluster);
+			if (cluster == 0)
+				{
+				printf("Invalid directory or file %s\n", pathcomponent);
+				return -1;
+				}
+
+			printf("dir/file %s is in cluster %d.\n",pathcomponent, cluster);
+			memcpy(pathcomponent, (const void *) 0, 11);
+			break;
+			}
+		}
+		// travelled until the end of path but didn't find a "\"
+		if (i == FILENAME_LEN)
+			{
+			memcpy(pathcomponent, path, i);
+			cluster = fat_findcluster(pathcomponent, cluster);
+			if (cluster == 0)
+				{
+				printf("Invalid directory or file %s\n", pathcomponent);
+				return -1;
+				}
+			printf("last dir/file %s is in cluster 0x%xh.\n",pathcomponent, cluster);
+			break;
+			}
+	}
+return cluster; // return the starting cluster of the last file/dir in path
+}
+
+//////////////////////////////////////////////////////////////////////
+// read cluster and find the cluster that file resides in
+//////////////////////////////////////////////////////////////////////
+unsigned int fat_findcluster(char *file, unsigned int cluster)
+{
+struct dir_struct *table = NULL;
+int sector = 0; // sector to be read from disk
+
+
+int loop = 1;
+        while (loop)
+        {
+        // directories can span multiple cluster in FAT. Thus, we need to check if need be to read another cluster
+        unsigned int clustervalue = get_cluster_value(cluster);
+        if (clustervalue >= 0xFFF8) // no more cluster in this dir
+                loop = 0;
+
+	// convert the relative cluster used internally by FAT to an absolute sector used by ATA.
+	// from http://www.pjrc.com/tech/8051/ide/fat32.html
+	//cluster_begin_lba = Partition_LBA_Begin + Number_of_Reserved_Sectors + (Number_of_FATs * Sectors_Per_FAT);
+	// lba_addr = cluster_begin_lba + (cluster_number - 2) * sectors_per_cluster;
+
+	sector = drive[0].part[0].lba_start + rootdevice.reserved_sector_count + (rootdevice.FAT_count * rootdevice.sectors_per_fat) + ((cluster -2) * rootdevice.sectors_per_cluster);
+
+	// point cluster to the next cluster for looping purposes
+	cluster = clustervalue;
+
+	// Then, read the sector from disk
+	unsigned char *fatbuffer;
+	fatbuffer  = ata_readblock(sector);
+
+	int i;
+	for (i = 0; i < 16; i++)
+		{
+		memcpy((void *) table, (void *)fatbuffer, 32);
+		fatbuffer = fatbuffer + 32; // next loop = next file.
+
+		// skip long files
+                if (table->file_attr == FAT_ATTR_longfile)
+                        continue;
+
+		// in this case no more files in the specified sector, stop reading
+		if (table->file_name[0] == FAT_ATTR_nomore)
+                        break;
+
+		// change the file_name from FAT format to human readable
+		fat_raw_to_humanreadable(table->file_name);
+		if (strcmp((const char *)table->file_name,file) == 0) // we found the file/dir
+			{
+			int clusternumber = table->cluster_number_hi;
+			       clusternumber = (clusternumber << 8) + table->cluster_number_lo;
+			return clusternumber;	// return starting cluster of file
+			}
+		}
+	}
+// we didn't find the file/dir from this cluster, return an error
+// long file names could cause some files sometimes to be read
+// 0 can be an error since cluster must be an unsigned int and clusters start from 2
+
+return 0;
+}
+
 
 
 //////////////////////////////////////////////////////////////////////
@@ -322,4 +454,47 @@ return 1;
 }
 
 
+////////////////////////////////////////////////////
+// change file name from fat format to humanreadable
+// that is, from "MENU    LST" to "menu.lst"
+////////////////////////////////////////////////////
+void fat_raw_to_humanreadable(unsigned char filename[11])
+{
+// this assumes all file names are always lowercase
+// the extension is easy, just from uppercase to lowercase IF there's a letter
+int i;
 
+
+	// if it's a space, it means there' no more letters. Check if there's an extension
+for (i = 0; i <= 11; i++)
+	{
+	// if it's an uppercase letter, lowercase it
+	if (filename[i] >= 'A' && filename [i] <= 'Z')
+		filename[i] = filename[i] + 32;
+
+	if (filename[i] == ' ')	// padding starts
+		{
+		if (i <=8)	// we're padding the 8 part, not +3 part
+			{
+			if (filename[8] != 32) // there's an extension
+				{
+				// add the extension where the padding starts
+				filename[i] = '.';
+				filename[i+1] = filename[8];
+				filename[i+2] = filename[9];
+				filename[i+3] = filename[10];
+
+				// pad the rest with with null bytes
+				int k;
+				for (k=i+4; k <= 11; k++)
+					filename[k] = '\0';
+				}
+			else // no extension, pad everything with null bytes
+				{
+				filename[i] = '\0';
+				break;
+				}
+			}
+		}
+	}
+}

@@ -128,6 +128,14 @@ switch (keymap_fi[layer][scancode])
 	case '3':
 		debug_showfat(0);
 		break;
+
+	case '5':
+		{
+		int i =fat_parse_path("\\boot\\grub\\menu.lst");
+		if (i == -1)
+			printf("Error, invalid directory or not an absolute path\n");
+		break;
+		}
 	default:
 		printf("scancode: 0x%xh, key: %c\n",scancode, keymap_fi[layer][scancode]);
 	}
