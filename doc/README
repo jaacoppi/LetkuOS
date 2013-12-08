@@ -1,0 +1,20 @@
+LetkuOS
+=======
+
+== About ==
+LetkuOS is an operating system. It is in early development stages and currently can't be used for any production work. Userspace is completely missing. No specific goals are set, LetkuOS is a personal learning process first and foremost.
+
+The project was started in 2008-2009, then on hiatus until 2013. LetkuOS is a one person project by Juho Hiltunen aka jaacoppi.
+
+== License ==
+LetkuOS is MIT-licensed. see LICENSE for details.
+
+== Source code ==
+Source code can be found from github, see git://github.com/jaacoppi/LetkuOS.
+
+== Credits ==
+the osdev community at osdev.org and #osdev (irc.freenode.org) have been a great help.
+
+== Booting ==
+Booting has only been tried on Bochs and Qemu with a grub legacy bootloader.
+Currently LetkuOS needs a FAT32 file system on the first partition of the first hard drive.
