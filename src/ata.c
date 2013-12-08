@@ -10,8 +10,8 @@
 #include "portio.h"
 #include "string.h"
 
-extern int debug;
 
+int irqfired;
 /* this driver is limited to 4 primary partitions. They're called hda-hdd, linux style */
 struct hd hda, hdb, hdc, hdd;
 
@@ -42,6 +42,7 @@ This is a n lba28 driver, doesn't work with hard drives without lba
 void init_ata()
 {
 /* Installs 'ata_handler' to IRQ14 and IRQ15, master and slave */
+/* note that interrupts are currently disable in ata_drsel, so this code probably never runs*/
 irq_install_handler(14, ata_handler);
 irq_install_handler(15, ata_handler);
 
@@ -186,6 +187,9 @@ if (r->int_no == 46) // it's IRQ 14 AKA Primary bus
 if (r->int_no == 47) // it's IRQ 15 AKA Secondary bus
 	statusbyte = inb(ATA_SEC_DATAPORT + ATA_CMDSTATUS);
 
+if (statusbyte & ATA_STATUS_ERR)
+		printf("ATA Error!\n");
+
 return;
 }
 
@@ -201,6 +205,10 @@ ata_mastersel = drivesel;
 ata_outb(ata_dataport + ATA_DRSEL, ata_mastersel);
 /* wait until the drive is ready */
 while (inb(ata_dataport + ATA_CMDSTATUS)&ATA_STATUS_BSY);
+while (inb(ata_dataport + ATA_CMDSTATUS)&ATA_STATUS_DRQ);
+
+/* disable interrupts.. */
+ata_outb(ata_dataport + ATA_DCREG, BIT1);
 
 return 1;
 }
@@ -210,8 +218,11 @@ int ata_outb(int port, unsigned char outbyte)
 {
 /* wait until the drive is ready - that is, until BSY is unset */
 // ata_dataport is changed by ata_drsel
-while (inb(ata_dataport + ATA_CMDSTATUS)&ATA_STATUS_BSY);
-
+int i;
+for (i = 0; i < 5; i++)
+	while (inb(ata_dataport + ATA_CMDSTATUS) & 0x88); // 0x88 is BSY + DRQ, check for both a the same time
+//while (inb(ata_dataport + ATA_CMDSTATUS) & ATA_STATUS_BSY);
+//while (inb(ata_dataport + ATA_CMDSTATUS) & ATA_STATUS_DRQ);
 
 /* write outbyte to the chosen register. Controller is selected by ata_drsel */
 outb(port, outbyte);
@@ -249,14 +260,16 @@ if (ata_mastersel == MASTER_HD)
 else /* SLAVE_HD */
         outb(ata_dataport + ATA_DRSEL, 0xF0 | (ata_mastersel << 4) | (lba_address >> 24));
 
-
-outb(ata_dataport + ATA_CMDSTATUS,ATA_READSECTORS); /* send a read command */
-// at this point, the IRQ fires to tell us there's something coming.
-
+ata_outb(ata_dataport + ATA_CMDSTATUS,ATA_READSECTORS); /* send a read command */
+// at this point, the IRQ would fire to tell us there's something coming, but since nIEN is set in ata_drsel, nothing happens. We need to poll
+// bochs works fine without this next line, but qemu reads 512 zeroes.
+// this could be replaced with a print line or a small loop, but checking for the busy flag is the proper way to go
+// also, ata_inb would do this if we would use it for 512 byte reads
+// note that bochs will cause a double fault here if interrupts are ENABLED
+while (inb(ata_dataport + ATA_CMDSTATUS)&ATA_STATUS_BSY);
 
 
 // Read the whole sector from disk into buffer
-
 in16s(ata_dataport, (512 / 2), buf);
 return buf;
 

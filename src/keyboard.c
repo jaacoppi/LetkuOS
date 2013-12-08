@@ -18,9 +18,10 @@ and from Acess2 */
 #define KEYB_CONTROL_CONFIG_BYTE_WRITE 0x60
 /* make sure we use scan code set 2 */
 #define KEYB_SCANCODE_CMD 0xF0
-#define KEYB_SCANCODE_SET2 0x4 /* set bit 2 to 1 if you want scancode set 2 */
+#define KEYB_SCANCODE_SET2 0x02 /* set bit 2 to 1 if you want scancode set 2 */
 
-
+void keyb_outb(int port, int data);
+unsigned int keyb_inb(int port);
 void keyboard_handler(struct registers *r);
 extern void los_reboot();
 extern char keymap_fi[3][256];
@@ -29,31 +30,42 @@ int keyb_keyup = 0; /* controls shift and alt */
 
 /* init the keyboard */
 void init_keyboard() {
-/* TODO: see if you need to flush the input buffer with inb calls after outb to clear ACKs and other return values */
-/* TODO: Basic Assurance Self Test and other inits to make sure the keyboard is actually connected */
-unsigned char recbyte;
-/* reset keyboard - test if it exists and works */
-outb(KEYB_CONTROL,KEYB_SELFTEST);
-recbyte = inb(KEYB_DATA);
+// TODO: use a timer for timeouts to keyboard read and writes
+/* TODO: see if you need to flush the input buffer with keyb_inb calls after outb to clear ACKs and other return values */
 
-if (recbyte != KEYB_SELFTESTOK) /* self test failed */
+unsigned char recbyte;
+/* reset keyboard - test 5 times if it exists and works.
+Note that this is a quick & dirty hack, not the proper way to check whether or not a keyboard exists */
+int i, j = 0;
+for (i = 0; i < 5; i++)
 	{
-	panic("Keyboard self test failed!\n");
-	return;
+	keyb_outb(KEYB_CONTROL,KEYB_SELFTEST);
+	recbyte = keyb_inb(KEYB_DATA);
+
+	if (recbyte != KEYB_SELFTESTOK) /* self test failed */
+		j++;
 	}
 
+if (j != 0)
+	printf("WARN: keyboard self test failed %d times\n",j);
+
 /* read the ps2 control byte */
-outb(KEYB_CONTROL, KEYB_CONTROL_CONFIG_BYTE_READ);
-recbyte = inb(KEYB_DATA);
+keyb_outb(KEYB_CONTROL, KEYB_CONTROL_CONFIG_BYTE_READ);
+recbyte = keyb_inb(KEYB_DATA);
 
 /* write the control after xor'ing (=toggling) the translation bit */
 recbyte = recbyte ^ BIT6;	/* XOR - change nothing but the translation bit */
-outb(KEYB_CONTROL, KEYB_CONTROL_CONFIG_BYTE_WRITE);
-outb(KEYB_DATA, recbyte);
+keyb_outb(KEYB_CONTROL, KEYB_CONTROL_CONFIG_BYTE_WRITE);
+keyb_outb(KEYB_DATA, recbyte);
 
 /* use scancode set 2. This should be default, but just in case */
-outb(KEYB_DATA, KEYB_SCANCODE_CMD);
-outb(KEYB_DATA, 0x2); // docs say only BIT2 should be set for scancode set2. 0x2, however, is BIT1. Strange
+keyb_outb(KEYB_DATA, KEYB_SCANCODE_CMD);
+keyb_outb(KEYB_DATA, KEYB_SCANCODE_SET2);
+
+// Set scancode command sends an ACK when a scancode is set. Discard it by flushing the output buffer
+// this seems to work best for both bochs and qemu, since bochs returns more bytes than qemu
+while (inb(KEYB_CONTROL) & BIT0)
+	keyb_inb(KEYB_DATA);
 
 /* configure the IRQ handler. This should be the last call so we can safely init the keyboard first without needing to worry about interrupts */
 irq_install_handler(1, keyboard_handler);
@@ -66,9 +78,8 @@ void keyboard_handler(struct registers *r)
 /* NOTE: keypress = make code, key release / keyup = break code */
 
 unsigned char scancode;
-/* Read from the keyboard's data buffer */
+/* Read from the keyboard's data buffer. We don't need keyb_inb since this is an IRQ and the buffer has to have something because the IRQ fired */
 scancode = inb(KEYB_DATA);
-
 /* this scancode means that the next one) is a key up code - do nothing this time */
 if (scancode == KEYB_BREAK_CODE)
 	{
@@ -94,7 +105,7 @@ if (scancode == KEY_LS)
 	return;
 	}
 
-if (scancode == KEYB_CTRL_ACK) /* this scancode is an ack from the previous command */
+if (scancode == KEYB_CTRL_ACK) /* this scancode is an ack from the previous command. We should never get this when doing normal user interaction, only in the init phase. This is here just in case, but slows down the keyboard routine. */
 	return;
 
 /* else, sent the keycode to the actual keyboard driver */
@@ -139,5 +150,46 @@ switch (keymap_fi[layer][scancode])
 	default:
 		printf("scancode: 0x%xh, key: %c\n",scancode, keymap_fi[layer][scancode]);
 	}
+}
+
+
+////////////////////////////////////////////
+// outb commands to the keyboard after checking for input buffer empty/full
+////////////////////////////////////////////
+
+void keyb_outb(int port, int data)
+{
+// TODO: use a timer for timeouts to keyboard read and writes
+
+// KEYB_CONTROL 0x64 is the Status Register when reading from it.
+// loop until bit 1 is clear (input buffer is empty, we can put our own data there
+while (keyb_inb(KEYB_CONTROL) & BIT1);
+
+// do a normal outb
+outb(port,data);
+}
+
+////////////////////////////////////////////
+// inb commands to the keyboard after checking for output buffer empty/full
+////////////////////////////////////////////
+
+unsigned int keyb_inb(int port)
+{
+// TODO: use a timer for timeouts to keyboard read and writes
+
+// KEYB_CONTROL 0x64 is the Status Register when reading from it.
+// loop until bit 0 is set (output buffer is full, there's something to read
+while (!inb(KEYB_CONTROL) & BIT0);
+
+int retval = inb(port);
+
+if (retval == KEYB_CTRL_ACK) // don't care for ACKS when initializing keyboard. This means no error checking, which is bad.. TODO: fix it by checking for retval 0 in the init routine
+	return 0;
+
+// TODO: if you receive a 0xFE, the keyboard asks you to resend the previous command
+if (retval == KEYB_RESEND)
+	panic("keyboard sent a RESEND command, but it's not implemented yet!\n");
+
+return retval;
 }
 

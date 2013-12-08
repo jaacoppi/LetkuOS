@@ -13,6 +13,7 @@ void scancode_handler (unsigned char scancode);
 #define KEYB_CONTROL	0x64
 
 #define KEYB_CTRL_ACK	0xFA /* keyboard acks commands with this */
+#define KEYB_RESEND	0xFE /* keyboard wants you to resend previous command */
 #define KEYB_SELFTEST	0xAA /* keyboard acks commands with this */
 #define KEYB_SELFTESTOK	0x55 /* keyboard acks commands with this */
 
