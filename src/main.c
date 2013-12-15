@@ -8,6 +8,7 @@
 #include "ata.h"
 #include "fs.h"
 #include "string.h"
+#include "mm.h"
 
 void los_reboot();
 void panic(const char *fmt, ...);
@@ -43,6 +44,7 @@ init_irq();
 init_keyboard();
 init_ata();
 init_vfs();
+init_memory(boot_info);
 
 printf("%s booted and ready to go!\n", CODENAME);
 
