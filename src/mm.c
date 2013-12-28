@@ -5,16 +5,19 @@
 #include "multiboot.h"
 #include "letkuos-common.h"
 #include "stdio.h"
+#include "string.h"
 #include "mm.h"
 
 void init_mm();
 void init_paging();
-void *kmalloc(int memsize);
+void *kmalloc(unsigned long memsize);
 void kfree(void *ptr);
 void mm_defrag();
+int list_insert(unsigned long memsize);
 
 struct memorymap mmap; // used by the physical memory manager to know the available memory size & location
-int *physmemptr; // pointer to the singly linked list
+// consider using long instead of int to cover all the memory..
+unsigned long *memptr; // points to the address kmalloc reserves - the base of physical memory given to programs
 struct memory_map *memmap; // a multiboot struct
 
 extern int endofkernel; // from linker.ld script. This is where our kernel ends
@@ -22,7 +25,7 @@ extern int endofkernel; // from linker.ld script. This is where our kernel ends
 /* HOW LetkuOS memory management works:
 1. The kernel is loaded at 0x00100000
 2. LetkuOS uses a next-fit singly linked list for physical memory allocation and deallocation
-3. by default the allocater allocates 4kb memory units (size of pages, so we can easily use paging)
+3. by default the allocator allocates 4kb memory units (size of pages, so we can easily use paging)
 4. the singly linked list needs to store info of pagenr AVAILABLE MEMORY / 4096 pages
 5. because of #4, the memory manager reserves sizeof(physmem) * pagenr
 */
@@ -41,7 +44,7 @@ if (!(bootinfo->flags & BIT0))
 if (!(bootinfo->flags & BIT6))
 	panic("multiboot info doesn't include mmap_ fields!\n");
 
-printf("the machine has (roughly) %d megs of (upper) RAM!\n", bootinfo->mem_upper/1024);
+printf("the machine has 0x%xh of (upper) RAM, that's (roughly) %d megs!\n", bootinfo->mem_upper*1024,bootinfo->mem_upper/1024);
 
 // this function reserves the memory used by kernel & memory manager
 
@@ -72,7 +75,7 @@ for (memmap = (struct memory_map *) bootinfo->mmap_addr; (unsigned long) memmap 
 		{
 		mmap.base = base;
 		mmap.size = len;
-		printf("found a contiguous usable uppermem area, start: 0x%xh, length: %d bytes!\n",mmap.base, mmap.size);
+		printf("found a contiguous usable uppermem area, start: 0x%xh, length: 0x%xh bytes!\n",mmap.base, mmap.size);
 		break;
 		}
 	// debug: print the memory map
@@ -87,22 +90,42 @@ if (mmap.size == 0)
 unsigned long pagenr = mmap.size / 4096;
 unsigned long manager_reserved = sizeof(struct physmem) * pagenr;
 // for debug
-printf("need to reserve for kernel: %x\n", &endofkernel);
-printf("need for pages: %d\nneed to reserve for memory manager: 0x%xh bytes\n",pagenr, manager_reserved);
-printf("need for kernel + memory manager: 0x%xh\n",(&endofkernel + manager_reserved));
+printf("need for kernel + memory manager: 0x%xh\n",((int) &endofkernel + manager_reserved));
+printf("need for pages: %d\n",pagenr);
+
 // 4. make sure the reserved memory for memory manager resides in right after the memory reserved for kernel: endofkernel
 // when a pointer points to endofkernel and all the following structs will be loaded AFTER it, we know the whole singly linked list will be between endofkernel and endofkenerl + manager_reserved
 
-//point a pointer at endofkernel and init a physmem struct there: this is our first memory allocation
-physmemptr = &endofkernel;
+// to be on the safe side, clear all memory used by the memory manager
+// I wonder if this is needed or just slows down init
+//printf("debug: clearing out 0x%xh bytes of memory for memory manager\n", manager_reserved);
+memset(&endofkernel, 0, manager_reserved);
 
-//printf("physmemptr before: 0x%xh\n",physmemptr);
-unsigned int *kernel_and_mm = kmalloc(((int) &endofkernel + manager_reserved));
-// if everything is okay, kernal_and_mm should be equal to physmemptr before, and physmemptr after should be physmemptr + sizeof(struct physmem)
-//printf("physmemptr after: 0x%xh\n",physmemptr);
-//printf("kernal_and_mm after: 0x%xh\n",kernal_and_mm);
-//printf("sizeof: 0x%xh\n",sizeof(struct physmem));
+struct physmem *temp = (struct physmem *) &endofkernel;
+temp->used = MM_UNINIT;		// for kmalloc to work, the memory area must be set uninit (it is by default, though)
+temp->next = MMLIST_LAST;	// for kmalloc to work, the linked list has to have an end
 
+
+// mark memory use by kernel and memory manager as used
+// malloc reserves the area from memptr, so manually adjust it to zero first
+memptr = 0;
+kmalloc(( (int) &endofkernel + manager_reserved));
+
+// after this, the actual mallocs are done starting from memptr. Memptr now holds the pointer to free physical memory
+// this causes a GCC warning "assignment makes pointer from integer without a cast"
+// the reason for that is we're assigning an address to pointer. That's what we want to do with malloc
+memptr = (unsigned long) &endofkernel + (unsigned long) manager_reserved;
+
+// for testing kmalloc
+kmalloc(0x10);
+kmalloc(0x10);
+kmalloc(0x05);
+kmalloc(0x100);
+int *i = kmalloc(0x4);
+printf("base address for kmalloced memory is: 0x%xh\n",i);
+
+printf("the next should fail due to lack of memory..\n");
+kmalloc(0xEF000000);
 
 init_paging();
 return;
@@ -121,26 +144,46 @@ void init_paging()
 /////////////////////////////////////////////////////////////////
 // Allocate memsize worth of memory and return a pointer to its base
 /////////////////////////////////////////////////////////////////
-void *kmalloc(int memsize)
+void *kmalloc(unsigned long memsize)
 {
-// everything below this should be done in kmalloc..
-struct physmem *temp = (struct physmem *) physmemptr;
+// kmalloc allocates memsize worth of memory and returns the pointer to the starting addres
+// it goes through a singly linked list of used/unused memory areas until it finds one that is free and big enough
+// if it doesn', it runs memdefrag to see if two adjacent free lists can be combined to be big enough
+// if they can't, we're out of memory and thus we panic (or handle the error correctly..)
 
-temp->used = 1;
-temp->base = (int) &physmemptr;
+// sanity check: if asked for 0 memory, return NULL
+if (memsize == 0)
+	return NULL; // TODO: should NULL be != 0? random code could be executed if ever run from 0
+
+// if there's no more memory, panic.
+if ((unsigned long) (memptr + memsize) > mmap.size)
+	panic("kmalloc: we're out of memory!\n"); // TODO: memdefrag and loop the linked list from the beginning
+
+
+// find an unused item in the singly linked list and set the properties Note that ->next is set in list_insert
+struct physmem *temp = (struct physmem *) list_insert(memsize);
+temp->used = MM_USED;
+temp->base = (unsigned long) memptr;
 temp->size = memsize;
-temp->next = (unsigned int) physmemptr + sizeof(struct physmem);
-physmemptr = temp->next;
-printf("reserved 0x%xh bytes, next pointer shall be at: 0x%xh\n",temp->size, physmemptr);
-return temp;
 
+printf("debug: reserved 0x%xh bytes starting from 0x%xh,  memptr is at: 0x%xh\n",temp->size, temp->base,temp);
+
+int retval = (unsigned long) memptr; // return the area in current memptr address
+// TODO: 4-kbyte align memptr?
+
+// without the typecasts (unsigned long), the result below would be memptr + memsize*4. Relates to sizeof pointer, I'd guess.
+// this causes a GCC warning "assignment makes pointer from integer without a cast"
+// the reason for that is we're assigning an address to pointer. That's what we want to do with malloc
+memptr = (unsigned long ) memptr + (unsigned long) memsize; //the next time an alloc happens, claim memory starting from this address
+return (unsigned long *) retval;
 }
 
 /////////////////////////////////////////////////////////////////
-// Deallocate memory pointed to by base
+// Deallocate memory pointed to by ptr(->base)
 /////////////////////////////////////////////////////////////////
 void kfree(void *ptr)
 {
+// note that memptr can never be < &endofkernel + manager_reserved
 // defrag the singly linked list
 mm_defrag();
 }
@@ -153,4 +196,75 @@ void mm_defrag()
 // loop from beginning until end of memory
 // keep a counter of previous block and it's free state
 // when a free block is found, merge it with the previous block if that block is free
+
+// figure out how this works with list_delete
+}
+
+
+
+/* singly linked list functions start here.
+copied the ideas from http://www.thelearningpoint.net/computer-science/data-structures-singly-linked-list-with-c-program-source-code */
+
+// find the first free area of size memsize. Return a pointer to the item in the list (a pointer to a struct physmem)
+int list_insert(unsigned long memsize)
+{
+// start from the first item in the list. This is the first item in the physmem manager, right after the kernel
+struct physmem *linkedlistptr = (struct physmem *) &endofkernel;
+
+// iterate through the list until the following conditions are met:
+	// 1. the area is FREE (it means it has been initialized
+	// 2. for a free area, the memory area is big enough
+
+while (true)
+	{
+	// for debug:
+	// printf("looping the linked list at  0x%xh..\n",linkedlistptr);
+	if (linkedlistptr->used == MM_FREE && linkedlistptr->size > memsize)
+			{
+			// debug: the freeing code does not exist when writing this, panic to debug
+			panic("first free area in the linked list found!\n");
+
+			// found a big enough free memory area, let's use it
+			printf("found a free area: 0x%xh\n",linkedlistptr);
+			return (unsigned long) linkedlistptr;
+			}
+
+	// if we're at the end of the list, break. otherwise, get the next item
+	if (linkedlistptr->next == MMLIST_LAST)
+		break;
+
+	// this gives the gcc warning about pointer from integer. It could be avoided, for example, by using relative addresses in ->next and then simply incrementing the linkedlistptr
+	linkedlistptr = linkedlistptr->next;
+	}
+
+// we ran until the end of the list. we need to insert a new item
+// at this point, linkedlistptr points to the current last item
+
+// loop through the memory manager area until you find an uninitialized memory manager area and utilize it
+struct physmem *newitem = (struct physmem *) &endofkernel;
+while (true)
+	{
+	if (newitem->used == MM_UNINIT)
+		{
+		linkedlistptr->next = (unsigned long) newitem;
+		newitem->next = MMLIST_LAST;
+		printf("inserting the newitem in 0x%xh - next is  0x%xh\n",newitem, newitem->next);
+		break;
+		}
+
+
+	// loop the next item, note the gcc warning
+	newitem = (unsigned long) newitem + sizeof (struct physmem);
+	}
+
+return (unsigned long) newitem;
+}
+
+
+// delete the item in the list. Caution must be taken to not leave memory holes in either the free memory area or the allocator list
+// 1. Mark memory as free.
+// 2. remove the item from the list
+int list_delete(int listnode)
+{
+return 1;
 }
