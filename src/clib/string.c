@@ -31,6 +31,28 @@ char *strcpy(char *dest, const char *src)
    return dest;
 }
 
+// my own doing
+char *strncpy(char *dest, const char *src, int n)
+{
+int i;
+const char *p = src;
+char *q = dest;
+for (i = 0; i < n; i++)
+	{
+	if (*p != '\0')
+		{
+		*q = *p;
+		p++;
+		q++;
+		}
+	else
+		break;
+	}
+
+*q = '\0';
+return dest;
+}
+
 void * memcpy(void *dest, const void *src, int count)
 {
     const char *sp = (const char *)src;

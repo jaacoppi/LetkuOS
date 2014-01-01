@@ -5,6 +5,7 @@
 short *memsetw(short *dest, short val, int count);
 void *memset(void *dest, char val, int count);
 char *strcpy(char *dest, const char *src);
+char *strncpy(char *dest, const char *src, int n);
 void * memcpy(void *dest, const void *src, int count);
 int memcmp(const void* s1, const void* s2, int len);
 char *strstr(char *s1, const char *s2);
