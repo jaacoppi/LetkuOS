@@ -8,13 +8,6 @@
 #include "string.h"
 #include "mm.h"
 
-void init_mm();
-void init_paging();
-void *kmalloc(unsigned long memsize);
-void kfree(void *ptr);
-void mm_defrag();
-int list_insert(unsigned long memsize);
-
 struct memorymap mmap; // used by the physical memory manager to know the available memory size & location
 // consider using long instead of int to cover all the memory..
 unsigned long *memptr; // points to the address kmalloc reserves - the base of physical memory given to programs
@@ -117,6 +110,7 @@ kmalloc(( (int) &endofkernel + manager_reserved));
 memptr = (unsigned long) &endofkernel + (unsigned long) manager_reserved;
 
 // for testing kmalloc
+/*
 kmalloc(0x10);
 kmalloc(0x10);
 kmalloc(0x05);
@@ -126,7 +120,7 @@ printf("base address for kmalloced memory is: 0x%xh\n",i);
 
 printf("the next should fail due to lack of memory..\n");
 kmalloc(0xEF000000);
-
+*/
 init_paging();
 return;
 }
@@ -161,7 +155,8 @@ if ((unsigned long) (memptr + memsize) > mmap.size)
 
 
 // find an unused item in the singly linked list and set the properties Note that ->next is set in list_insert
-struct physmem *temp = (struct physmem *) list_insert(memsize);
+struct physmem *temp = (struct physmem *) list_insert_unknown(memsize);
+
 temp->used = MM_USED;
 temp->base = (unsigned long) memptr;
 temp->size = memsize;
@@ -183,9 +178,94 @@ return (unsigned long *) retval;
 /////////////////////////////////////////////////////////////////
 void kfree(void *ptr)
 {
-// note that memptr can never be < &endofkernel + manager_reserved
-// defrag the singly linked list
-mm_defrag();
+// if pointer is NULL (or 0), do nothing
+if (ptr == NULL || ptr == 0)
+	return;
+
+// kfree only marks the memory area free
+struct physmem *temp = (struct physmem *) ptr;
+temp->used = MM_FREE;
+}
+
+
+void *krealloc(void *ptr, unsigned long memsize)
+{
+/* straight from linux man:
+The realloc() function changes the size of the memory block pointed to by ptr to size bytes.  The contents
+will be unchanged in the range from the start of the region up to the minimum of the old and new sizes.  If
+the new size is larger than the old size, the added memory will not be initialized.
+
+If the area pointed to was moved, a free(ptr) is done.
+*/
+
+// If ptr is NULL, then the call is equivalent to malloc(size), for all values of size;
+if (ptr == NULL)
+	return kmalloc(memsize);
+
+// if size is equal to zero,  and  ptr  is  not NULL,  then  the call is equivalent to free(ptr).
+if (memsize == 0)
+	{
+	kfree(ptr);
+	return 0;
+	}
+
+// reallocation
+
+
+// read the current values of the list item
+// ptr points to a base address of memory, so we need to loop through the list to find the item that has the same base
+struct physmem *linkedlistptr = (struct physmem *) &endofkernel;
+while (linkedlistptr->next != MMLIST_LAST)
+	{
+	if(linkedlistptr->base == ptr)
+		break;
+	linkedlistptr = linkedlistptr->next;
+	}
+
+if(linkedlistptr->next == MMLIST_LAST && linkedlistptr->base != ptr) // didn't find anything
+	panic("krealloc couldn't find the proper list item!\n");
+
+//at this point, linkedlistptr is the item we want to realloc
+struct physmem *temp = (struct physmem *) linkedlistptr;
+
+// case 0: do nothing
+if (memsize == linkedlistptr->size)
+	return ptr;
+
+printf("ptr is 0x%xh, newsize is 0x%xh, oldsize is 0x%xh\n",linkedlistptr,memsize, temp->size);
+// case 1: decrease memory size and add the extra memory to the linked list as free
+if (memsize < temp->size)
+	{
+	temp->size = memsize;
+
+	// make linkedlistptr point to the last item
+	linkedlistptr = (struct physmem *) &endofkernel;
+	while (linkedlistptr->next != MMLIST_LAST)
+		linkedlistptr = linkedlistptr->next;
+
+	struct physmem *linkedlistptr = (struct physmem *) &endofkernel;
+	while (linkedlistptr->next != MMLIST_LAST)
+		linkedlistptr = linkedlistptr->next;
+
+	// add the new struct as the last item in the list
+	struct physmem *newarea = (struct physmem *) list_insert_known(temp->size - memsize,linkedlistptr);
+	newarea->base = temp->base + temp->size;
+	newarea->used = MM_FREE;
+	newarea->size = temp->size;
+
+	return ptr;
+	}
+
+// case 2: increase memory size
+if (memsize > temp->size)
+	{
+	// loop through the items to see if the item with base overlapping ptr + memsize is free or uninitialized - can we merge?
+
+	// can't merge, we need to relocate the memory
+	}
+//Unless ptr is NULL, it must have been returned by an earlier call to malloc(), calloc() or realloc().  
+
+
 }
 
 /////////////////////////////////////////////////////////////////
@@ -206,10 +286,14 @@ void mm_defrag()
 copied the ideas from http://www.thelearningpoint.net/computer-science/data-structures-singly-linked-list-with-c-program-source-code */
 
 // find the first free area of size memsize. Return a pointer to the item in the list (a pointer to a struct physmem)
-int list_insert(unsigned long memsize)
+// TODO: should list_insert take care of setting all the properties, or should malloc/realloc?
+int list_insert(unsigned long memsize, struct physmem *linkedlistptr)
 {
-// start from the first item in the list. This is the first item in the physmem manager, right after the kernel
-struct physmem *linkedlistptr = (struct physmem *) &endofkernel;
+
+// if linkedlistptr is NULL, start from the first item in the list. This is the first item in the physmem manager, right after the kernel
+// if it's non NULL, it means we're calling from krealloc() and already know where the free area is
+if (linkedlistptr == NULL)
+	linkedlistptr = (struct physmem *) &endofkernel;
 
 // iterate through the list until the following conditions are met:
 	// 1. the area is FREE (it means it has been initialized
