@@ -4,7 +4,9 @@
 
 #include "letkuos-common.h"
 #include "fat.h"
+#include "fs.h"
 #include "ata.h"
+#include "mm.h"
 #include "stdio.h"
 #include "string.h"
 
@@ -259,9 +261,9 @@ while (true)
 return cluster; // return the starting cluster of the last file/dir in path
 }
 
-//////////////////////////////////////////////////////////////////////
-// read cluster and find the cluster that file resides in
-//////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+// read a directory cluster and find the cluster that specified file resides in
+///////////////////////////////////////////////////////////////////////////////
 unsigned int fat_findcluster(char *file, unsigned int cluster)
 {
 struct dir_struct *table = NULL;
@@ -277,11 +279,7 @@ int loop = 1;
                 loop = 0;
 
 	// convert the relative cluster used internally by FAT to an absolute sector used by ATA.
-	// from http://www.pjrc.com/tech/8051/ide/fat32.html
-	//cluster_begin_lba = Partition_LBA_Begin + Number_of_Reserved_Sectors + (Number_of_FATs * Sectors_Per_FAT);
-	// lba_addr = cluster_begin_lba + (cluster_number - 2) * sectors_per_cluster;
-
-	sector = drive[0].part[0].lba_start + rootdevice.reserved_sector_count + (rootdevice.FAT_count * rootdevice.sectors_per_fat) + ((cluster -2) * rootdevice.sectors_per_cluster);
+	sector = fat_cluster2sector(cluster);
 
 	// point cluster to the next cluster for looping purposes
 	cluster = clustervalue;
@@ -321,7 +319,162 @@ int loop = 1;
 return 0;
 }
 
+// after the function returns, *ptr stores the beginning of the file and the size is returned by the function
+int fat_loadfile(int *ptr, char *filename)
+{
+// find out how big the file is. Store the info in ptr entry
+struct file_entry *entry = kmalloc(sizeof (file_entry));
+fat_populate_entry(entry, filename);
 
+unsigned char *temp_ptr = (unsigned char *) ptr;
+
+// reallocate enough memory for the file
+printf("size = 0x%xh\n",entry->size);
+printf("ptr = %x\n",ptr);
+int *i = krealloc(ptr,entry->size);
+printf("i = %x\n",i);
+panic("here!\n");
+
+int startcluster = entry->startcluster;
+// read sectors to the memory address ptr until there are no more sectors to be read
+while (true)
+        {
+        // convert FAT cluster to ATA sector and read the sector
+        int sector = fat_cluster2sector(startcluster);
+
+        temp_ptr = ata_readblock(sector);
+
+        // find out next cluster to be read
+        int next = get_cluster_value(startcluster);
+
+        if (next >= 0xFFF8)     // if the value is >= 0xFFF8, it's the last cluster - no more sectors in the file, we$
+                break;
+        else    // otherwise, set cluster to the new value, advance pointer and continue looping
+                {
+                startcluster = next;
+                temp_ptr = temp_ptr + 512; // does this work?
+                }
+
+        }
+int retval = entry->size;
+kfree(entry);
+return retval;
+}
+
+
+
+int fat_populate_entry(struct file_entry *pointer, char *filename)
+{
+// parse the holding directory based on filename.
+// set a pointer to the end of filename and go backwards from there
+int len = strlen(filename);
+char *ptr = filename;
+ptr = ptr + len;
+int filelen = 0;
+while (*ptr != '\\')
+        {
+        len--;
+        ptr--;
+	filelen++;
+        }
+
+// at this point, len contains the length of file until the last '\'
+// copy the path to directory holding filename to buffer, and it's starting cluster to dircluster
+ptr = filename;
+char *buffer = kmalloc(len);
+memcpy(buffer,ptr,len);
+int dircluster = fat_parse_path(buffer);
+kfree(buffer);
+
+// parse the file name the be sought inside the directory
+char filetemp[11] = "";
+ptr = ptr + len + 1; // advance pointer beyond the dir path. The +1 is the final \
+//strncpy(filetemp, (const char *) ptr, (strlen(filename) - len));
+strncpy(filetemp, (const char *) ptr, filelen);
+// populate the file_entry struct with the file info - we know the starting cluster of the directory
+
+// table holds info about one file at a time. Could also be table[16] and no memcpy in for loop??
+struct dir_struct *table = NULL;
+int sector = 0; // sector to be read from disk
+int loop = 1;
+        while (loop)
+        {
+        // directories can span multiple cluster in FAT. Thus, we need to check if need be to read another cluster
+        unsigned int clustervalue = get_cluster_value(dircluster);
+        if (clustervalue >= 0xFFF8) // no more cluster in this dir, don't loop again
+                loop = 0;
+
+        // get the absolute sector to be read
+        sector = fat_cluster2sector(dircluster);
+
+        // point cluster to the next cluster for looping purposes
+	dircluster = clustervalue;
+
+        // Then, read the sector from disk
+        unsigned char *fatbuffer;
+        fatbuffer  = ata_readblock(sector);
+
+       // for < 16 'cos sector/tablesize = 512/32 = 16. 16 entries in one sector
+        int i;
+        for (i = 0; i < 16; i++)
+                {
+                memcpy((void *) table, (void *)fatbuffer, 32);
+                fatbuffer = fatbuffer + 32; // next loop = next file inside this directory
+
+                // debug note: currently just skip long file names, don't implement anything. See gitlog for fat_read$
+                if (table->file_attr == FAT_ATTR_longfile)
+                        continue;
+
+               // if it is 0xE5 the file in the entry has been deleted - continue to the next
+                if (table->file_name[0] == FAT_ATTR_deleted)
+                        continue;
+
+
+                // in this case no more files in the specified sector, stop reading
+                if (table->file_name[0] == FAT_ATTR_nomore)
+                        break;
+
+                // else, it's a proper file, is it the one we look for?
+                fat_raw_to_humanreadable(table->file_name);
+                if (strcmp((const char *)filetemp, (const char *)table->file_name) == 0)
+                        {
+	                // populate the file_entry entry
+                        strcpy(pointer->name, (const char *)table->file_name);
+                        pointer->size = table->file_size;
+                        if (table->file_attr & FAT_ATTR_directory)
+                                pointer->type = FILE_ISDIR;
+                        else
+                                pointer->type = FILE_ISFILE;
+
+                        int clusternumber = table->cluster_number_hi;
+                        clusternumber = (clusternumber << 8) + table->cluster_number_lo;
+                        pointer->startcluster = clusternumber;
+                        return 1; // return success
+                        }
+                }
+        }
+
+return 0; // file not found
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////////
+// convert a relative cluster value used by FAT to absolute sector value used by ATA
+////////////////////////////////////////////////////////////////////////////////////
+// cluster2sector takes a relative FAT cluster as input and returns the absolute sector on disk
+// the return value can then be fed to ata_readblock to get the contents of the file
+// NOTE: this only works for the data area (=files); not for the File Allocation Table itself.
+unsigned int fat_cluster2sector(unsigned int cluster)
+{
+// convert the relative cluster used internally by FAT to an absolute sector used by ATA.
+// from http://www.pjrc.com/tech/8051/ide/fat32.html
+//cluster_begin_lba = Partition_LBA_Begin + Number_of_Reserved_Sectors + (Number_of_FATs * Sectors_Per_FAT);
+// lba_addr = cluster_begin_lba + (cluster_number - 2) * sectors_per_cluster;
+
+int sector = drive[0].part[0].lba_start + rootdevice.reserved_sector_count + (rootdevice.FAT_count * rootdevice.sectors_per_fat) + ((cluster -2) * rootdevice.sectors_per_cluster);
+return sector;
+}
 
 //////////////////////////////////////////////////////////////////////
 // follow a cluster chain

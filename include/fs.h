@@ -16,4 +16,18 @@ int init_vfs();
 #define MBR_BOOTSIG1    0x55
 #define MBR_BOOTSIG2    0xAA
 
+
+// file_entry stores info about a file or directory
+// note that file_entry is FAT specific because it's using startcluster
+typedef struct file_entry
+{
+        char type;      // 0x01 for DIR, 0x02 for FILE
+        char name[11];  // follows the FAT convention
+        unsigned int size;      // filesize in bytes
+        unsigned long startcluster; // starting cluster in FAT32. Currently the FS driver is FAT32 specific
+} file_entry;
+
+#define FILE_ISDIR      0x01
+#define FILE_ISFILE     0x02
+
 #endif

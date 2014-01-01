@@ -13,6 +13,8 @@ and from Acess2 */
 #include "letkuos-common.h"
 #include "errors.h"
 #include "fat.h"
+#include "elf.h"
+#include "mm.h"
 
 #define KEYB_CONTROL_CONFIG_BYTE_READ 0x20
 #define KEYB_CONTROL_CONFIG_BYTE_WRITE 0x60
@@ -146,6 +148,18 @@ switch (keymap_fi[layer][scancode])
 		if (i == -1)
 			printf("Error, invalid directory or not an absolute path\n");
 		break;
+		}
+
+	case '6':
+		{
+		parse_elf("\\boot\\grub\\menu.lst");
+		break;
+		}
+
+	case '7':
+		{
+		int *ptr = kmalloc(512);
+		fat_loadfile(ptr, "\\boot\\grub\\menu.lst");
 		}
 	default:
 		printf("scancode: 0x%xh, key: %c\n",scancode, keymap_fi[layer][scancode]);

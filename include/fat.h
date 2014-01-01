@@ -6,15 +6,19 @@
 #define _letkuos_fat_h _letkuos_fat_h
 
 #include "ata.h"
+#include "fs.h"
 #include "letkuos-common.h"
 
 void fat_scan(struct partition *part);
 int fat_readdir(int sector);
 unsigned int fat_parse_path(char *path);
 unsigned int fat_findcluster(char *file, unsigned int cluster);
-
+unsigned int fat_cluster2sector(unsigned int cluster);
 int follow_clusterchain(unsigned int cluster);
 unsigned int get_cluster_value(unsigned int cluster);
+unsigned int fat_cluster2sector(unsigned int cluster);
+int fat_loadfile(int *ptr, char *filename);
+int fat_populate_entry(file_entry *pointer, char *filename);
 int debug_showfat(int fatpage);
 /* from osdev.org wiki, adapted a bit */
 /* also from http://support.microsoft.com/kb/q140418 */
