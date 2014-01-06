@@ -71,11 +71,7 @@ int loop = 1;
 		loop = 0;
 
 	// convert the relative cluster used internally by FAT to an absolute sector used by ATA.
-	// from http://www.pjrc.com/tech/8051/ide/fat32.html
-	//cluster_begin_lba = Partition_LBA_Begin + Number_of_Reserved_Sectors + (Number_of_FATs * Sectors_Per_FAT);
-	// lba_addr = cluster_begin_lba + (cluster_number - 2) * sectors_per_cluster;
-
-	sector = drive[0].part[0].lba_start + rootdevice.reserved_sector_count + (rootdevice.FAT_count * rootdevice.sectors_per_fat) + ((cluster -2) * rootdevice.sectors_per_cluster);
+	sector = fat_cluster2sector(cluster);
 
 	// point cluster to the next cluster for looping purposes
 	cluster = clustervalue;
@@ -140,9 +136,9 @@ int loop = 1;
 
 		// print out the starting cluster of this file
 		int clusternumber = table->cluster_number_hi;
-		       clusternumber = (clusternumber << 8) + table->cluster_number_lo;
-		printf("cluster %x\n",clusternumber);
+		       clusternumber = (clusternumber << 16) + table->cluster_number_lo;
 
+		printf("cluster 0x%xh\n",clusternumber);
 		}
 	}
 
@@ -170,8 +166,8 @@ unsigned char *clusterbuffer;
 // one cluster is 32 bits. Thus, with 512 byte sectors, one cluster occupies 4 x 8 bytes (4 chars)
 // in any case, fat_offset means the offset of the cluster from the beginning of FAT
 unsigned int fat_offset = cluster * 4;
-
 // find out the absolute sector of hard disk where the cluster resides
+// note that cluster2sector() doesn't work here since we're dealing with FAT, not the data area
 unsigned int sector =  drive[0].part[0].lba_start + rootdevice.reserved_sector_count + (fat_offset / clustersize);
 
 // read 512 bytes from the proper hda sector
@@ -187,7 +183,6 @@ table_value = table_value + clusterbuffer[offset];
 
 //remember to ignore the high 4 bits.
 table_value = table_value & 0x0FFFFFFF;
-
 return table_value;
 }
 
@@ -230,7 +225,7 @@ while (true)
 
 			// at this point, pathcomponent contains the directory/file we want to search
 			// find the cluster that holds the dir we want
-			printf("trying to find %s in cluster %d\n",pathcomponent, cluster);
+			printf("trying to find %s in the directory in cluster %d\n",pathcomponent, cluster);
 
 			cluster = fat_findcluster(pathcomponent, cluster);
 			if (cluster == 0)
@@ -239,15 +234,22 @@ while (true)
 				return -1;
 				}
 
-			printf("dir/file %s is in cluster %d.\n",pathcomponent, cluster);
+			printf("dir/file %s is in cluster 0x%xh.\n",pathcomponent, cluster);
 			memcpy(pathcomponent, (const void *) 0, 11);
 			break;
 			}
 		}
-		// travelled until the end of path but didn't find a "\"
+		// travelled until the end of path but didn't find a "\". We're searching for the last part
 		if (i == FILENAME_LEN)
 			{
-			memcpy(pathcomponent, path, i);
+			// we need to travel the last part again to find out the file name length. Could be something else than 8+3
+			memset(pathcomponent,0,FILENAME_LEN);
+			for (i = 0; i < FILENAME_LEN; i++)
+				if (path[i] == '\0')
+					break;
+
+			strncpy(pathcomponent, path, strlen(path));
+
 			cluster = fat_findcluster(pathcomponent, cluster);
 			if (cluster == 0)
 				{
@@ -307,7 +309,7 @@ int loop = 1;
 		if (strcmp((const char *)table->file_name,file) == 0) // we found the file/dir
 			{
 			int clusternumber = table->cluster_number_hi;
-			       clusternumber = (clusternumber << 8) + table->cluster_number_lo;
+			       clusternumber = (clusternumber << 16) + table->cluster_number_lo;
 			return clusternumber;	// return starting cluster of file
 			}
 		}
@@ -447,7 +449,7 @@ int loop = 1;
                                 pointer->type = FILE_ISFILE;
 
                         int clusternumber = table->cluster_number_hi;
-                        clusternumber = (clusternumber << 8) + table->cluster_number_lo;
+                        clusternumber = (clusternumber << 16) + table->cluster_number_lo;
                         pointer->startcluster = clusternumber;
                         return 1; // return success
                         }
@@ -482,7 +484,6 @@ return sector;
 
 int follow_clusterchain(unsigned int cluster)
 {
-cluster =7;
 
 // setup some helper ints for calculations
 
