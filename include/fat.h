@@ -17,7 +17,7 @@ unsigned int fat_cluster2sector(unsigned int cluster);
 int follow_clusterchain(unsigned int cluster);
 unsigned int get_cluster_value(unsigned int cluster);
 unsigned int fat_cluster2sector(unsigned int cluster);
-int fat_loadfile(int *ptr, char *filename);
+int fat_loadfile(char *filename);
 int fat_populate_entry(file_entry *pointer, char *filename);
 int debug_showfat(int fatpage);
 /* from osdev.org wiki, adapted a bit */

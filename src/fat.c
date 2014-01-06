@@ -67,7 +67,7 @@ int loop = 1;
 	{
 	// directories can span multiple cluster in FAT. Thus, we need to check if need be to read another cluster
 	unsigned int clustervalue = get_cluster_value(cluster);
-	if (clustervalue >= 0xFFF8) // no more cluster in this dir
+	if (clustervalue >= 0x0FFFFFF8) // no more clusters in this dir
 		loop = 0;
 
 	// convert the relative cluster used internally by FAT to an absolute sector used by ATA.
@@ -176,13 +176,9 @@ clusterbuffer = ata_readblock(sector);
 // to read the value of the cluster we care about, use offset (in the current sector)
 unsigned int offset = fat_offset % clustersize;
 
-// read 28 bits to an unsigned int, taking endianndess into account
-unsigned int table_value =  clusterbuffer[offset+1]; // low byte
-table_value = table_value << 8;
-table_value = table_value + clusterbuffer[offset];
+// read 28 bits to an unsigned int (ANDing loses the top 4 bits)
+unsigned int table_value = *(unsigned int*)&clusterbuffer[offset] & 0x0FFFFFFF;
 
-//remember to ignore the high 4 bits.
-table_value = table_value & 0x0FFFFFFF;
 return table_value;
 }
 
@@ -277,7 +273,7 @@ int loop = 1;
         {
         // directories can span multiple cluster in FAT. Thus, we need to check if need be to read another cluster
         unsigned int clustervalue = get_cluster_value(cluster);
-        if (clustervalue >= 0xFFF8) // no more cluster in this dir
+        if (clustervalue >= 0x0FFFFFF8) // no more clusters in this dir
                 loop = 0;
 
 	// convert the relative cluster used internally by FAT to an absolute sector used by ATA.
@@ -322,45 +318,55 @@ return 0;
 }
 
 // after the function returns, *ptr stores the beginning of the file and the size is returned by the function
-int fat_loadfile(int *ptr, char *filename)
+int fat_loadfile(char *filename)
 {
 // find out how big the file is. Store the info in ptr entry
 struct file_entry *entry = kmalloc(sizeof (file_entry));
 fat_populate_entry(entry, filename);
 
-unsigned char *temp_ptr = (unsigned char *) ptr;
+int *ptr = kmalloc(entry->size);
 
+// TODO: remove the printf calls, they were hero for debugging krealloc, which isn't needed after all
 // reallocate enough memory for the file
-printf("size = 0x%xh\n",entry->size);
-printf("ptr = %x\n",ptr);
-int *i = krealloc(ptr,entry->size);
-printf("i = %x\n",i);
-panic("here!\n");
+//printf("size needed for krealloc: %d bytes, that's 0x%xh\n",entry->size,entry->size);
+//printf("ptr currently points to: 0x%xh\n",ptr);
+//ptr = krealloc(ptr,entry->size);
+//printf("ptr now points to: 0x%xh\n",ptr);
+//panic("here!\n");
 
 int startcluster = entry->startcluster;
+kfree(entry);
+
 // read sectors to the memory address ptr until there are no more sectors to be read
+unsigned char *temp_ptr = kmalloc(512);
+int *retptr = ptr; // in the loop we advance the pointer when copying the text to memory. Thus, return the beginning of ptr, not the end
 while (true)
         {
         // convert FAT cluster to ATA sector and read the sector
         int sector = fat_cluster2sector(startcluster);
 
-        temp_ptr = ata_readblock(sector);
+	temp_ptr = ata_readblock(sector);
+
+	// copy the read sector to the memory address ptr
+	// TODO: find out why memcpy(ptr,temp_ptr ,512); doesn't work
+	int i;
+	for (i = 0; i < 512; i++)
+		ptr[i] = temp_ptr[i];
 
         // find out next cluster to be read
         int next = get_cluster_value(startcluster);
 
-        if (next >= 0xFFF8)     // if the value is >= 0xFFF8, it's the last cluster - no more sectors in the file, we$
+        if (next >= 0x0FFFFFF8)     // if the value is >= 0x0FFFFFF8, it's the last cluster - no more sectors in the file, we$
                 break;
         else    // otherwise, set cluster to the new value, advance pointer and continue looping
                 {
                 startcluster = next;
-                temp_ptr = temp_ptr + 512; // does this work?
+                ptr = ptr + 512; // does this work?
                 }
 
         }
-int retval = entry->size;
-kfree(entry);
-return retval;
+kfree(temp_ptr);
+return retptr;
 }
 
 
@@ -403,7 +409,7 @@ int loop = 1;
         {
         // directories can span multiple cluster in FAT. Thus, we need to check if need be to read another cluster
         unsigned int clustervalue = get_cluster_value(dircluster);
-        if (clustervalue >= 0xFFF8) // no more cluster in this dir, don't loop again
+        if (clustervalue >= 0x0FFFFFF8) // no more cluster in this dir, don't loop again
                 loop = 0;
 
         // get the absolute sector to be read
@@ -494,7 +500,7 @@ unsigned int lastsector = 0;
 unsigned char *clusterbuffer;
 // loop until the end of cluster chain
 int i;
-printf("for a file starting in cluster %x..",cluster);
+printf("for a file starting in cluster 0x%xh..",cluster);
 for (i = 1; i > 0; i++)
 	{
 	// the reasoning for fat_offset is a bit unclear.. this is what might be happening:
@@ -504,12 +510,6 @@ for (i = 1; i > 0; i++)
 
 	// find out the absolute sector of hard disk where the cluster resides
 	unsigned int sector =  drive[0].part[0].lba_start + rootdevice.reserved_sector_count + (fat_offset / clustersize);
-
-	/* for debugging -s debugfat instead of follow
-	printf("cluster here: %d\n",cluster);
-	debug_showfat(cluster - 2048 -32 );
-	return;
-	*/
 
 	// read 512 bytes from the proper hda sector
 	// only read if the sector has changed from last time. This reduces unnecessary ATA accesses
@@ -522,13 +522,8 @@ for (i = 1; i > 0; i++)
 	// to read the value of the cluster we care about, use offset (in the current sector)
 	unsigned int offset = fat_offset % clustersize;
 
-	// read 28 bits to an unsigned int, taking endianndess into account
-	unsigned int table_value =  clusterbuffer[offset+1]; // low byte
-	table_value = table_value << 8;
-	table_value = table_value + clusterbuffer[offset];
-
-	//remember to ignore the high 4 bits.
-	table_value = table_value & 0x0FFFFFFF;
+	// read 28 bits to an unsigned int (ANDing loses the top 4 bits)
+	unsigned int table_value = *(unsigned int*)&clusterbuffer[offset] & 0x0FFFFFFF;
 
 	/*
 	// for debug needs, print out the value
@@ -546,8 +541,8 @@ for (i = 1; i > 0; i++)
 	*/
 	// end debug
 
-	// if the value is >= 0xFFF8, it's the last cluster
-	if (table_value >= 0xFFF8)
+	// if the value is >= 0x0FFFFFF8, it's the last cluster
+	if (table_value >= 0x0FFFFFF8)
 		break;
 	// otherwise, set cluster to the new value and continue looping
 	cluster = table_value;

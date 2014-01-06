@@ -131,20 +131,30 @@ switch (keymap_fi[layer][scancode])
 	case '2':
 //		fat_readdir(4); // rootdevice.rootcluster == 2
 		// the cluster that has the rest of /boot/grub is 0x010B
-		fat_readdir(0x4); // rootdevice.rootcluster == 2
+//		fat_readdir(0x13896); // \home
+		fat_readdir(0x13896); // rootdevice.rootcluster == 2
 		break;
 
 	case '4':
-		follow_clusterchain(0); // rootdevice.rootcluster == 2
+//		TODO: be able to follow the clusterchain of prince.txt - 0x3897 - high byte problem?
+		follow_clusterchain(0x13897); // prince.txt?
+//		int i = get_cluster_value(0x13897); // prince.txt?
+//		printf("cluster value is 0x%xh\n",i);
+
+//		follow_clusterchain(0x7); // rootdevice.rootcluster == 2
 		break;
 
 	case '3':
-		debug_showfat(0);
+		debug_showfat(625);
+		extern struct fat32_BS rootdevice;
+		printf("note that the fat is %d sectors and it starts from 0\n",rootdevice.sectors_per_fat);
+		printf("after that, there's the copy of fat that's identical to the first one!\n");
 		break;
 
 	case '5':
 		{
-		int i =fat_parse_path("\\boot\\grub\\menu.lst");
+//		int i =fat_parse_path("\\boot\\grub\\menu.lst");
+		int i =fat_parse_path("\\home\\prince.txt");
 		if (i == -1)
 			printf("Error, invalid directory or not an absolute path\n");
 		break;
@@ -158,8 +168,13 @@ switch (keymap_fi[layer][scancode])
 
 	case '7':
 		{
-		int *ptr = kmalloc(512);
-		fat_loadfile(ptr, "\\boot\\grub\\menu.lst");
+		int *fileptr = fat_loadfile("\\home\\prince.txt");
+		printf("loaded a file at 0x%xh\n",fileptr);
+		int i = 0;
+		printf("text file starting here:\n");
+		for (i = 1024; i < 1220; i++) // arbitrary location in file for testing purposes
+			printf("%c",fileptr[i]);
+		break;
 		}
 	default:
 		printf("scancode: 0x%xh, key: %c\n",scancode, keymap_fi[layer][scancode]);
