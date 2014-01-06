@@ -149,6 +149,10 @@ void *kmalloc(unsigned long memsize)
 if (memsize == 0)
 	return NULL; // TODO: should NULL be != 0? random code could be executed if ever run from 0
 
+// the maximum number of linked list items is "available memory / 4096". This means we reserve 4kb pages at minimum
+if (memsize < 4096)
+	memsize = 4096;
+
 // if there's no more memory, panic.
 if ((unsigned long) (memptr + memsize) > mmap.size)
 	panic("kmalloc: we're out of memory!\n"); // TODO: memdefrag and loop the linked list from the beginning
@@ -260,8 +264,36 @@ if (memsize < temp->size)
 if (memsize > temp->size)
 	{
 	// loop through the items to see if the item with base overlapping ptr + memsize is free or uninitialized - can we merge?
+	// TODO..
 
-	// can't merge, we need to relocate the memory
+	// can't merge, we need to relocate the memory.
+
+	// kmalloc the first usable  memory area
+	int *newptr = kmalloc(memsize);
+//	struct physmem *newlistptr = (struct physmem *) &newptr;
+
+
+
+	// copy the current used memory to the new area
+	// ptr points to a base address of memory, so we need to loop through the list to find the item that has the same base
+	struct physmem *oldptr = (struct physmem *) &endofkernel;
+	while (oldptr->next != MMLIST_LAST)
+		{
+		if(oldptr->base == ptr)
+			break;
+		oldptr = oldptr->next;
+		}
+
+	// note that newptr is a pointer to the actual memory, not to the list physmem like oldptr is
+	memcpy((void *) newptr, (void *) oldptr->base,oldptr->size);
+	printf("debug: krealloc old base 0x%xh and size 0x%xh\n",oldptr->base,oldptr->size);
+	printf("debug: krealloc moved the stuff from 0x%xh to 0x%xh\n",oldptr->base,newptr);
+
+	// kfree the old area
+	kfree(ptr);
+
+	// return the new pointer
+	return newptr;
 	}
 //Unless ptr is NULL, it must have been returned by an earlier call to malloc(), calloc() or realloc().  
 
