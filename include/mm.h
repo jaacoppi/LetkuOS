@@ -21,7 +21,6 @@ struct physmem
         };
 
 void init_mm();
-void init_paging();
 void *kmalloc(unsigned long memsize);
 void kfree(void *ptr);
 void *krealloc(void *ptr, unsigned long memsize);

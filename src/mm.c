@@ -7,6 +7,7 @@
 #include "stdio.h"
 #include "string.h"
 #include "mm.h"
+#include "paging.h"
 
 struct memorymap mmap; // used by the physical memory manager to know the available memory size & location
 // consider using long instead of int to cover all the memory..
@@ -19,7 +20,7 @@ extern int endofkernel; // from linker.ld script. This is where our kernel ends
 1. The kernel is loaded at 0x00100000
 2. LetkuOS uses a next-fit singly linked list for physical memory allocation and deallocation
 3. by default the allocator allocates 4kb memory units (size of pages, so we can easily use paging)
-4. the singly linked list needs to store info of pagenr AVAILABLE MEMORY / 4096 pages
+4. the singly linked list needs to store info of pagenr AVAILABLE MEMORY / PAGESIZE pages
 5. because of #4, the memory manager reserves sizeof(physmem) * pagenr
 */
 
@@ -80,7 +81,7 @@ if (mmap.size == 0)
 
 
 // 3. set aside a region of memory to be used for the singly linked list of available memory
-unsigned long pagenr = mmap.size / 4096;
+unsigned long pagenr = mmap.size / PAGESIZE;
 unsigned long manager_reserved = sizeof(struct physmem) * pagenr;
 // for debug
 printf("need for kernel + memory manager: 0x%xh\n",((int) &endofkernel + manager_reserved));
@@ -104,11 +105,6 @@ temp->next = MMLIST_LAST;	// for kmalloc to work, the linked list has to have an
 memptr = 0;
 kmalloc(( (int) &endofkernel + manager_reserved));
 
-// after this, the actual mallocs are done starting from memptr. Memptr now holds the pointer to free physical memory
-// this causes a GCC warning "assignment makes pointer from integer without a cast"
-// the reason for that is we're assigning an address to pointer. That's what we want to do with malloc
-memptr = (unsigned long) &endofkernel + (unsigned long) manager_reserved;
-
 // for testing kmalloc
 /*
 kmalloc(0x10);
@@ -127,14 +123,6 @@ return;
 
 
 
-/////////////////////////////////////////////
-// Initialize paging
-/////////////////////////////////////////////
-void init_paging()
-{
-}
-
-
 /////////////////////////////////////////////////////////////////
 // Allocate memsize worth of memory and return a pointer to its base
 /////////////////////////////////////////////////////////////////
@@ -149,9 +137,22 @@ void *kmalloc(unsigned long memsize)
 if (memsize == 0)
 	return NULL; // TODO: should NULL be != 0? random code could be executed if ever run from 0
 
-// the maximum number of linked list items is "available memory / 4096". This means we reserve 4kb pages at minimum
-if (memsize < 4096)
-	memsize = 4096;
+// when allocating memory for page directories and page tables, the memory needs to be page aligned.
+// here, we make all calls to kmalloc() return a 4kb aligned address. This is wasteful, but this is a simple kmalloc() after all
+// TODO: make this test for PAGESIZE instead of assuming 4kb pages (0xFFFFF000)
+
+// if memptr is not already 4kb aligned, align it.
+int bit_test = (unsigned int long) memptr & 0x00000FFF;
+if (bit_test != 0)
+	{
+	memptr  = (long unsigned int) memptr & 0xFFFFF000;
+	memptr = (unsigned long) memptr + 0x1000;
+	}
+
+// the maximum number of linked list items is "available memory / PAGESIZE". This means we reserve 4kb pages at minimum
+if (memsize < PAGESIZE)
+	memsize = PAGESIZE;
+
 
 // if there's no more memory, panic.
 if ((unsigned long) (memptr + memsize) > mmap.size)
@@ -165,15 +166,16 @@ temp->used = MM_USED;
 temp->base = (unsigned long) memptr;
 temp->size = memsize;
 
-printf("debug: reserved 0x%xh bytes starting from 0x%xh,  memptr is at: 0x%xh\n",temp->size, temp->base,temp);
 
 int retval = (unsigned long) memptr; // return the area in current memptr address
-// TODO: 4-kbyte align memptr?
 
+// advance memptr so next kmalloc() will not overwrite this one
 // without the typecasts (unsigned long), the result below would be memptr + memsize*4. Relates to sizeof pointer, I'd guess.
 // this causes a GCC warning "assignment makes pointer from integer without a cast"
 // the reason for that is we're assigning an address to pointer. That's what we want to do with malloc
 memptr = (unsigned long ) memptr + (unsigned long) memsize; //the next time an alloc happens, claim memory starting from this address
+
+printf("debug: reserved 0x%xh bytes starting from 0x%xh, returning: 0x%xh\n",temp->size, temp->base, retval);
 return (unsigned long *) retval;
 }
 
@@ -221,12 +223,12 @@ if (memsize == 0)
 struct physmem *linkedlistptr = (struct physmem *) &endofkernel;
 while (linkedlistptr->next != MMLIST_LAST)
 	{
-	if(linkedlistptr->base == ptr)
+	if(linkedlistptr->base == (unsigned long) ptr)
 		break;
 	linkedlistptr = linkedlistptr->next;
 	}
 
-if(linkedlistptr->next == MMLIST_LAST && linkedlistptr->base != ptr) // didn't find anything
+if(linkedlistptr->next == MMLIST_LAST && linkedlistptr->base != (unsigned long) ptr) // didn't find anything
 	panic("krealloc couldn't find the proper list item!\n");
 
 //at this point, linkedlistptr is the item we want to realloc
@@ -279,7 +281,7 @@ if (memsize > temp->size)
 	struct physmem *oldptr = (struct physmem *) &endofkernel;
 	while (oldptr->next != MMLIST_LAST)
 		{
-		if(oldptr->base == ptr)
+		if(oldptr->base == (unsigned long) ptr)
 			break;
 		oldptr = oldptr->next;
 		}
@@ -295,9 +297,9 @@ if (memsize > temp->size)
 	// return the new pointer
 	return newptr;
 	}
-//Unless ptr is NULL, it must have been returned by an earlier call to malloc(), calloc() or realloc().  
 
 
+return 0; // don't think we should ever reach this point
 }
 
 /////////////////////////////////////////////////////////////////
@@ -364,7 +366,7 @@ while (true)
 		{
 		linkedlistptr->next = (unsigned long) newitem;
 		newitem->next = MMLIST_LAST;
-		printf("inserting the newitem in 0x%xh - next is  0x%xh\n",newitem, newitem->next);
+		printf("inserting the new listitem in 0x%xh - next is  0x%xh\n",newitem, newitem->next);
 		break;
 		}
 
@@ -382,5 +384,5 @@ return (unsigned long) newitem;
 // 2. remove the item from the list
 int list_delete(int listnode)
 {
-return 1;
+return listnode; // currently here just to remove compiler warnings. should return 1 on success. Could be this function will never be used anyway.
 }
