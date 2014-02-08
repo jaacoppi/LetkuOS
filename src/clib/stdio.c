@@ -28,11 +28,7 @@ printf("%d %s",int a, char[10] b); AND strncat(b,last-digit-of-a);
 So, while we have no idea what it does, we'll use pos = something
 in here as a workaround
 */
-/* 
-we needed this because the print_num section had *pos instead of pos.. shouldn't need it anymore
-int tmp = 0;
-pos = tmp; 
-*/
+
 if (*fmt != '%') 	/* not a control char, print it straight away */
 	writech(*fmt);
 else {
@@ -72,7 +68,9 @@ if (print_int == 1) {
 
 /* get the numbers in reverse order */
 int help = 0, help2 = 0, help3 = 0;
-unsigned char *helpstring = 0;
+// an unsigned long takes 4 bytes - 32 bits. This is the biggest number our printf can handle
+//unsigned char *helpstring = 0;
+unsigned char helpstring[32] = "";
 
 // this loops through numbers higher than 10
 while (num / radix > 0) {
