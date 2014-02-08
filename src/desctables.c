@@ -44,8 +44,6 @@ how binary and hexadecimal conversions, CF, 9A and so on work
 gdt_set_gate(NULL, NULL, NULL, NULL, NULL);                // NULL segment, required for some reason
 gdt_set_gate(1, 0, 0xFFFFFFFF, 0x9A, 0xCF); // Ring 0 Code segment
 gdt_set_gate(2, 0, 0xFFFFFFFF, 0x92, 0xCF); // Ring 0 Data segment
-
-// for some reason, these cause a triple fault with the mov ss, ax command in boot.asm
 gdt_set_gate(3, 0, 0xFFFFFFFF, 0xFA, 0xCF); // Ring 3 (User mode) code segment
 gdt_set_gate(4, 0, 0xFFFFFFFF, 0xF2, 0xCF); // Ring 3 (User mode) data segment
 
@@ -79,11 +77,12 @@ return 1;
 int init_idt()
 {
    idt_ptr.limit = sizeof(idt_entry_t) * NUM_IDT -1;
-   idt_ptr.base  = (int)&idt_entries;
+   idt_ptr.base  = (int) &idt_entries;
 
    memset(&idt_entries, 0, sizeof(idt_entry_t)*NUM_IDT);
 
 /* TODO: understand selector and flags */
+idt_set_gate( 0, (int)isr0 , 0x08, 0x8E);
 idt_set_gate( 1, (int)isr1 , 0x08, 0x8E);
 idt_set_gate( 2, (int)isr2 , 0x08, 0x8E);
 idt_set_gate( 3, (int)isr3 , 0x08, 0x8E);
@@ -117,7 +116,8 @@ idt_set_gate( 30, (int)isr30 , 0x08, 0x8E);
 idt_set_gate( 31, (int)isr31 , 0x08, 0x8E);
 
 
-idt_flush((int)&idt_ptr);
+//idt_flush((int)&idt_ptr);
+idt_flush();
 return 1;
 
 }

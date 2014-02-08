@@ -105,18 +105,6 @@ temp->next = MMLIST_LAST;	// for kmalloc to work, the linked list has to have an
 memptr = 0;
 kmalloc(( (int) &endofkernel + manager_reserved));
 
-// for testing kmalloc
-/*
-kmalloc(0x10);
-kmalloc(0x10);
-kmalloc(0x05);
-kmalloc(0x100);
-int *i = kmalloc(0x4);
-printf("base address for kmalloced memory is: 0x%xh\n",i);
-
-printf("the next should fail due to lack of memory..\n");
-kmalloc(0xEF000000);
-*/
 init_paging();
 return;
 }
@@ -175,7 +163,7 @@ int retval = (unsigned long) memptr; // return the area in current memptr addres
 // the reason for that is we're assigning an address to pointer. That's what we want to do with malloc
 memptr = (unsigned long ) memptr + (unsigned long) memsize; //the next time an alloc happens, claim memory starting from this address
 
-printf("debug: reserved 0x%xh bytes starting from 0x%xh, returning: 0x%xh\n",temp->size, temp->base, retval);
+//printf("debug: reserved 0x%xh bytes, start 0x%xh, return: 0x%xh\n",temp->size, temp->base, retval);
 return (unsigned long *) retval;
 }
 
@@ -366,7 +354,7 @@ while (true)
 		{
 		linkedlistptr->next = (unsigned long) newitem;
 		newitem->next = MMLIST_LAST;
-		printf("inserting the new listitem in 0x%xh - next is  0x%xh\n",newitem, newitem->next);
+//		printf("inserting the new listitem in 0x%xh - next is  0x%xh\n",newitem, newitem->next);
 		break;
 		}
 

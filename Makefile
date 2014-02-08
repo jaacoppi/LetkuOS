@@ -20,14 +20,14 @@ HDIMAGE=LetkuOS.img
 MOUNTPOINT=/mnt
 KERNELBIN=LetkuOS.krn
 TESTING=testing/
-BOOTFILE=$(SRCDIR)/boot.asm
+BOOTFILE=$(SRCDIR)/boot.s
 BOOTOBJ=$(SRCDIR)/boot.o
 REVID=$(shell date)
 
 
 all: beginning $(BOOTOBJ) $(OBJECTS)
 	@echo "Linking $(BOOTFILE) with C object files.."
-	@$(LD) -T $(SRCDIR)/linker.ld -o $(KERNELBIN) $(BOOTOBJ) $(OBJECTS) #-L$(LIBGCC)
+	@$(LD) -T $(SRCDIR)/linker.ld -o $(KERNELBIN) $(BOOTOBJ) src/interrupts.o $(OBJECTS) #-L$(LIBGCC)
 	@echo ""
 	@echo "############################################################"
 	@echo "# Kernel compilation finished. Kernel saved to $(KERNELBIN) #"
@@ -41,6 +41,7 @@ beginning:
 $(BOOTOBJ):
 	@echo "Assembling $(BOOTFILE).."
 	@$(AS) $(ASFLAGS) $(BOOTFILE) -o $(BOOTOBJ) 	# assembly
+	@$(AS) $(ASFLAGS) src/interrupts.s -o src/interrupts.o	 	# assembly
 
 $(OBJECTS): $(SOURCES) #$(INCLUDES)
 	@echo "Compiling C source file $@"
