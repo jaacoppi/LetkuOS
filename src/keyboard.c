@@ -162,20 +162,28 @@ switch (keymap_fi[layer][scancode])
 
 	case '6':
 		{
-		parse_elf("\\boot\\grub\\menu.lst");
+		char *fileptr = fat_loadfile("\\home\\prince.txt");
+		printf("loaded a file at 0x%xh\n",fileptr);
+		int i = 0;
+		printf("text file starting here:\n");
+		for (i = 0; i < 128; i++) // arbitrary location in file for testing purposes
+			printf("%c",fileptr[i]);
 		break;
 		}
 
 	case '7':
 		{
-		int *fileptr = fat_loadfile("\\home\\prince.txt");
-		printf("loaded a file at 0x%xh\n",fileptr);
-		int i = 0;
-		printf("text file starting here:\n");
-		for (i = 1024; i < 1220; i++) // arbitrary location in file for testing purposes
-			printf("%c",fileptr[i]);
+		parse_elf("\\userprog\\loop");
 		break;
 		}
+
+	case '8':
+		{
+		exec("\\userprog\\loop");
+		break;
+		}
+
+
 	default:
 		printf("scancode: 0x%xh, key: %c\n",scancode, keymap_fi[layer][scancode]);
 	}

@@ -324,15 +324,8 @@ int fat_loadfile(char *filename)
 struct file_entry *entry = kmalloc(sizeof (file_entry));
 fat_populate_entry(entry, filename);
 
-int *ptr = kmalloc(entry->size);
-
-// TODO: remove the printf calls, they were hero for debugging krealloc, which isn't needed after all
-// reallocate enough memory for the file
-//printf("size needed for krealloc: %d bytes, that's 0x%xh\n",entry->size,entry->size);
-//printf("ptr currently points to: 0x%xh\n",ptr);
-//ptr = krealloc(ptr,entry->size);
-//printf("ptr now points to: 0x%xh\n",ptr);
-//panic("here!\n");
+// ptr must be big enough to hold the whole file..
+unsigned char *ptr = kmalloc(entry->size);
 
 int startcluster = entry->startcluster;
 kfree(entry);
@@ -348,10 +341,7 @@ while (true)
 	temp_ptr = ata_readblock(sector);
 
 	// copy the read sector to the memory address ptr
-	// TODO: find out why memcpy(ptr,temp_ptr ,512); doesn't work
-	int i;
-	for (i = 0; i < 512; i++)
-		ptr[i] = temp_ptr[i];
+	memcpy(ptr, temp_ptr, 512);
 
         // find out next cluster to be read
         int next = get_cluster_value(startcluster);
@@ -361,10 +351,12 @@ while (true)
         else    // otherwise, set cluster to the new value, advance pointer and continue looping
                 {
                 startcluster = next;
-                ptr = ptr + 512; // does this work?
+                ptr = (int) ptr + 512; // ptr + 512 would increase by 2048 - but for some reason it's correct..
                 }
 
         }
+
+// note: ptr must remain allocated since it's the copy of the file callers will use
 kfree(temp_ptr);
 return retptr;
 }
