@@ -24,6 +24,8 @@ BOOTFILE=$(SRCDIR)/boot.s
 BOOTOBJ=$(SRCDIR)/boot.o
 REVID=$(shell date)
 
+## testing userspace programs
+LOOP=userprog/loop.c
 
 all: beginning $(BOOTOBJ) $(OBJECTS)
 	@echo "Linking $(BOOTFILE) with C object files.."
@@ -47,7 +49,9 @@ $(OBJECTS): $(SOURCES) #$(INCLUDES)
 	@echo "Compiling C source file $@"
 	@$(CC) $(CFLAGS) -o $@ -c $*.c	# C
 
-
+userprog: $(LOOP)
+	@$(CC) $(CFLAGS) -o userprog/loop.o -c userprog/loop.c	# loop
+	@$(LD) -T userprog/linker.ld -o userprog/loop userprog/loop.o
 
 install: all
 	@echo "Needing root access for loopdevice.."

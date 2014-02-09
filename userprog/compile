@@ -1,0 +1,1 @@
+nasm -f elf loop.asm  && ld -T userlink.ld -o loop loop.o && ./loop
