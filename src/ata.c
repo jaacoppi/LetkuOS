@@ -25,7 +25,8 @@ int ata_drsel(int controlsel, int drsel);
 int ata_dataport, ata_mastersel; /* these control which controller/drive to inb and outb */
 
 // used for returning a string from ata_readblock
-unsigned char *buf;
+//unsigned char *buf;
+unsigned char buf[512];
 
 
 
@@ -271,15 +272,8 @@ while (inb(ata_dataport + ATA_CMDSTATUS)&ATA_STATUS_BSY);
 
 // Read the whole sector from disk into buffer
 in16s(ata_dataport, (512 / 2), buf);
-return buf;
+return &buf;
 
 
-// debug: we used to do it like this. It was a bit problematic since the declarations were inside this function. buf above is global.
-/*
-unsigned char buffer[512] = "";
-in16s(ata_dataport, (512 / 2), buffer);
-unsigned char *ptr = buffer;
-return ptr;
-*/
 }
 
