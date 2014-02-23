@@ -7,18 +7,17 @@ x86 Paged memory
 #include "mm.h"
 #include "stdio.h"
 
+unsigned int *kernel_pagedir;
 /////////////////////////////////////////////
 // Initialize paging
 /////////////////////////////////////////////
 void init_paging()
 {
-printf("Starting paging..\n");
 int i; // for loops
 int address = 0; // for identity mapping page entries / frames / whatever they're called. Should learn the terms.
 
 // create your page directory and set all entries to not present
-
-unsigned int *kernel_pagedir = kmalloc (PAGESIZE);
+kernel_pagedir = kmalloc (PAGESIZE);
 printf("created a kernel pagedir at 0x%xh\n",kernel_pagedir);
 
 for (i = 0; i < 1024; i++)
@@ -28,7 +27,6 @@ for (i = 0; i < 1024; i++)
 unsigned int *kernel_pagetable = kmalloc(PAGESIZE);
 
 printf("created a kernel pagetable at 0x%xh\n", kernel_pagetable);
-
 for (i = 0; i < 1024; i++)
 	{
 	// set bits present, read/write, supervisor only
@@ -37,9 +35,10 @@ for (i = 0; i < 1024; i++)
 	}
 
 
+
 // set the first entry in page directory to point at our page table
 // the kernel now has 4mb of identity mapped read/write memory for the kernel available from 0 to 4mb
-kernel_pagedir[0] = kernel_pagetable;
+kernel_pagedir[0] = (int) kernel_pagetable;
 kernel_pagedir[0] = kernel_pagedir[0]|PAGE_PRES_RW_KRN; // supervisor, read/write, present
 
 // debug stuff
