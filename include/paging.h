@@ -5,6 +5,11 @@
 #define _letkuos_paging_h _letkuos_paging_h
 
 void init_paging();
+int paging_mapvirt2phys(int virtaddr, int physframe);
+int paging_remap(int newvirt, int oldvirt);
+int paging_protection(int virtaddr, char flags);
+int paging_present(int virtaddr, char present);
+int paging_findphysframe(int virtaddr);
 
 #define PAGESIZE 	4096	// 4kb pages
 

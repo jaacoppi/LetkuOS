@@ -13,11 +13,8 @@ struct memorymap mmap; // used by the physical memory manager to know the availa
 struct memory_map *memmap; // a multiboot struct
 extern int endofkernel; // from linker.ld script. This is where our kernel ends
 
-static int pmm_getframe();
 static void pmm_releaseframe();
-static void vmmlist_delete(struct vmmlist *listitem);
-static void vmmlist_use(struct vmmlist *linkedlistptr, int memsize);
-static struct vmmlist* vmmlist_merge(int memsize);
+
 
 // pmm_stackptr points to the page frame stack - deals with the physical memory manager
 int *pmm_stackptr = &endofkernel; // physical memory manager starts right after the kernel
@@ -25,8 +22,9 @@ int pmm_maxstacksize;
 int vmm_maxlistsize;
 // vmm_list is an item in the singly linked list
 struct vmmlist *vmmlist_ptr;
-struct vmmlist *vmmlist_start;
-
+//struct vmmlist *vmmlist_start;
+int *vmmlist_baseptr = 0; // baseptr holds the base (virtual) memory address of the next vmmlist_insert
+int heapstart;
 /* HOW LetkuOS memory management works:
 1. The kernel is loaded at 0x00100000
 2. LetkuOS uses a stack of free pages for  physical memory allocation and deallocation.
@@ -91,9 +89,18 @@ if (mmap.size == 0)
 // Part 2 of memory init: set aside a region of memory to be used by PMM and VMM
 
 // if all memory is free, all pages are pushed to the stack. pmm_maxstacksize gives us the maximum stacksize
+
+
+// the actual mallocs (kernel heap) will start after the area reserved for
+// 1. kernel
+// 2. physical memory manager
+// 3. some arbitrary memory space for linked list items
+
+#define MAXLISTITEMS	0x100
 int pagenr = mmap.size / PAGESIZE;
 pmm_maxstacksize = pagenr * sizeof(int);
-vmm_maxlistsize  = pagenr * sizeof(struct vmmlist);
+vmm_maxlistsize  = MAXLISTITEMS * sizeof(struct vmmlist);
+
 
 // init the physical memory manager and stack of free pages
 int i;
@@ -105,59 +112,31 @@ for (i = pagenr; i > 0; i--) // push the last of physical memory first in stack 
 
 // init the virtual memory manager - store it right after PMM. Note that pmm_stackptr is set correctly in the previous loop 
 // vmmlist_start now always points to the beginning of the vmmlist, just like the name says
-vmmlist_start  = (struct vmmlist *) ((int) &endofkernel + (int) pmm_maxstacksize);
+vmmlist_start = (struct vmmlist *) ((int) &endofkernel + (int) pmm_maxstacksize);
 
-vmmlist_ptr = vmmlist_start;
-for (i = 0; i <= pagenr; i++)
-	{
-	// a dirty hack here
-	// by default, a list item holds PAGESIZE worth of memory
-	// the first kmalloc will be the kernel + pmm + vmm, thus a merge and deletion of list items is required
-	// vmmlist_delete() requires paging, but we can't enable paging before the first kmalloc()
-	// thus, manually set the size of the first memory area so that we can safely use kmalloc before setting up paging
-	if (i == 0)
-		{
-		vmmlist_ptr->size = ((int) &endofkernel + (int) pmm_maxstacksize + (int) vmm_maxlistsize);
-//		printf("first malloc is of size 0x%xh\n",vmmlist_ptr->size);
-		vmmlist_ptr->used = MM_FREE;
-		vmmlist_ptr->base = 0;
-		}
-	else
-		{
-		vmmlist_ptr->size = PAGESIZE;
-		vmmlist_ptr->used = MM_FREE;
-		vmmlist_ptr->base = (i * PAGESIZE + 0x1000 + ((int) &endofkernel + (int) pmm_maxstacksize + (int) vmm_maxlistsize)) & 0xFFFFF000;
-		}
-
-	if (i == pagenr) // this is the last occurrence, mark as last in list
-		{
-		vmmlist_ptr->next = (struct vmmlist *) MMLIST_LAST;
-		break;
-		}
-	else
-		{
-		// causes a gcc warning, but what can we do?
-		vmmlist_ptr->next = (int) vmmlist_ptr + sizeof(struct vmmlist);
-		}
-//	printf("ptr here 0x%xh, iteration %d\n",vmmlist_ptr,i);
-	vmmlist_ptr = vmmlist_ptr->next;
-	}
+// actual memory allocation will start from heapstart
+heapstart  = (int) &endofkernel + (int) pmm_maxstacksize + (int) vmm_maxlistsize;
+//printf("heapstart set to 0x%xh\n",heapstart);
 
 // Part 3 of memory init: mark memory used by kernel, PMM and VMM as used
-kmalloc((int) &endofkernel + (int) pmm_maxstacksize + (int) vmm_maxlistsize);
-printf("kernel memory reserved!\n");
-init_paging();
-kmalloc(0x3000);
-int *hep = kmalloc(0x1000);
-kfree (hep);
-hep = kmalloc(0x1000);
-kfree (hep);
-hep = kmalloc(0x1000);
-kfree (hep);
-hep = kmalloc(0x1000);
-kfree (hep);
-// Part 4 of memory init: Start paging. Must be after kmalloc so that paging gets setup after the kernel + pmm + vmm
+// the tricky part here is that kmalloc requires paging and the linked list to work. We'll insert the first list item manually
 
+vmmlist_start->next = MMLIST_LAST;
+vmmlist_start->used = MM_USED;
+vmmlist_start->size = heapstart;
+// vmmlist_ptr and vmmlist_baseptr should point to the first available slot for a list item
+// vmmlist_start points to the area reserved for kernel. vmmlist_additem should start from one index after it.
+vmmlist_ptr = vmmlist_start;
+vmmlist_ptr++;
+vmmlist_baseptr = heapstart;
+
+// allocate the physical memory as well
+for (i = 0; i <= (int) vmmlist_baseptr; i = i + PAGESIZE) // <= or < ..
+	pmm_getframe();
+
+
+// Part 4 of memory init: Start paging.
+init_paging();
 
 return;
 }
@@ -177,7 +156,7 @@ return;
 ///////////////////////////////////////////////////////////////////////
 // pmm_getframe: mark a physical page as used by popping from the stack
 ///////////////////////////////////////////////////////////////////////
-static int pmm_getframe()
+int pmm_getframe()
 {
 // get the topmost item in the stack
 int retval = *pmm_stackptr;
@@ -201,152 +180,113 @@ pmm_stackptr++;
 // ================================================================================
 
 
-// vmmlist_insert and vmmlist_delete follow a flat list approach. This is suitable for virtual memory, not physical
+// vmmlist_additem and vmmlist_insert follow a flat list approach. This is suitable for virtual memory, not physical
 
 /* singly linked list functions start here.
 copied the ideas from http://www.thelearningpoint.net/computer-science/data-structures-singly-linked-list-with-c-program-source-code */
 
-// find the first free area of size memsize. Return a pointer to the item in the list (a pointer to a struct vmmlist)
-// TODO: should list_insert take care of setting all the properties, or should malloc/realloc?
-int vmmlist_insert(unsigned long memsize, struct vmmlist *linkedlistptr)
+/////////////////////////////////////////////////////////////////
+// add a new item in the singly linked list. adjust base and size
+/////////////////////////////////////////////////////////////////
+int vmmlist_additem(unsigned long memsize)
 {
+// no more space in the linked list
+// TODO: get rid of this limitation
+if (vmmlist_ptr == heapstart)
+	panic("vmmlist_additem(): no space in linked list\n");
 
-//TODO: adjust vmmlist_insert_known so that it's used to have linkedlistptr->base as a known virtual address
-// actually should we be given a vmmlist as an arg but an address instead?
+// find the last item in the list - this is where we will add our item
 
-// if linkedlistptr is NULL, start from the first item in the list. This is the first item in the vmmlist manager, right after the kernel
-// if it's non NULL, it means we're calling from krealloc() and already know where the free area is
-if (linkedlistptr == NULL)
-	linkedlistptr = vmmlist_start;
+// the first item..
+struct vmmlist *linkedlistptr = vmmlist_start;
+
+// TODO: get this as a paramater from vmmlist_insert, it's done there already
+// loop until the end of list - after the loop linkedlistptr points to the last item
+while (true)
+	{
+	if (linkedlistptr->next == (struct vmmlist *) MMLIST_LAST)
+		break;
+
+	linkedlistptr = linkedlistptr->next;
+	}
+
+// 4-byte align baseptr so we can utilize it with paging and stuff
+int bit_test = (int) vmmlist_baseptr & 0x00000FFF;
+if (bit_test != 0)
+	{
+	vmmlist_baseptr = (int) vmmlist_baseptr & 0xFFFFF000;
+	vmmlist_baseptr = (int) vmmlist_baseptr + PAGESIZE;
+	}
 
 
-// iterate through the list until the following conditions are met:
-	// 1. the area is FREE (it means it has been initialized
-	// 2. for a free area, the memory area is big enough
+// vmmlist_ptr holds the  address for the next memory item, make it the next item
+vmmlist_ptr->base = (int) vmmlist_baseptr;
+vmmlist_ptr->size = memsize;
+vmmlist_ptr->used = MM_USED;
+
+linkedlistptr->next = vmmlist_ptr;	// adjust the linked list
+vmmlist_ptr->next = (struct vmmlist *) MMLIST_LAST;
+vmmlist_baseptr = (int) vmmlist_baseptr + memsize; // the next allocation of virtual memory will be done here
+vmmlist_ptr++; // next additem will be done here
+return linkedlistptr->next;
+}
+
+
+/////////////////////////////////////////////////////////////////
+// use an existing list item, don't create a new one
+/////////////////////////////////////////////////////////////////
+int vmmlist_insert(unsigned long memsize)
+{
+struct vmmlist *linkedlistptr = vmmlist_start;
+
+// TODO: also utilize the last item, correct the while loop
+//printf("searching for existing list items..\n");
 
 while (true)
 	{
 	// for debug:
-
-//	printf("now looping list at 0x%xh, size is 0x%xh, need 0x%xh\n",linkedlistptr, linkedlistptr->size,memsize);
+//	printf("looping a listitem at 0x%xh, size of this is 0x%xh, next is 0x%xh\n",linkedlistptr, linkedlistptr->size,linkedlistptr->next);
 	if (linkedlistptr->used == MM_FREE && linkedlistptr->size >= memsize)
 			{
-			vmmlist_use(linkedlistptr, memsize);
+//			printf("using available free listitem 0x%xh\n",linkedlistptr);
+			linkedlistptr->used = MM_USED;
 			return (unsigned long) linkedlistptr->base;
 			}
 
-	// if we're at the end of the list, there was no big enough memory areas
-	if (linkedlistptr->next == (struct vmmlist *)MMLIST_LAST)
-		{
-// for debug
-//		printf("no big enough free memory areas found, merging...\n");
-		linkedlistptr = vmmlist_merge(memsize);
-		if (linkedlistptr == 0)
-			panic("can't merge a big enough contiguous virtual memory area!");
-		else
-			{
-			vmmlist_use(linkedlistptr, memsize);
-			return (unsigned long) linkedlistptr->base;
-			}
+	// next item is the last in list, stop looping
+	if (linkedlistptr->next == (struct vmmlist *) MMLIST_LAST)
 		break;
-		}
+
 	// this gives the gcc warning about pointer from integer. It could be avoided, for example, by using relative addresses in ->next and then simply incrementing the linkedlistptr
 	linkedlistptr = linkedlistptr->next;
+	}
+
+// if we're here, we're at the end of the list and  there was no big enough free memory areas
+// for debug
+linkedlistptr = vmmlist_additem(memsize);
+if (linkedlistptr == 0)
+	panic("can't add a big enough contiguous virtual memory area!");
+else
+	{
+	linkedlistptr->used = MM_USED;
+	return (unsigned long) linkedlistptr->base;
 	}
 
 return 0; // return 0 on error, we should never reach this part
 }
 
 
-// delete the item in the list. Caution must be taken to not leave memory holes in either the free memory area or the allocator list
-// note that we don't free any memory like kfree does
-static void vmmlist_delete(struct vmmlist *listitem)
-{
-listitem->used = MM_FREE;
-listitem->base = 0;
-listitem->size = 0;
-listitem->next = MM_UNINIT;
-}
-
-/////////////////////////////////////////////////////////////////
-// Defrag the singly linked list by merging adjacent free areas
-/////////////////////////////////////////////////////////////////
-struct vmmlist* vmmlist_merge(int memsize)
-{
-struct vmmlist *curptr = vmmlist_start;
-
-// find the first free block
-while (curptr->used != MM_FREE)
-	curptr = curptr->next;
-
-struct vmmlist *lastptr = curptr;
-curptr = curptr->next;
-
-// at this point, lastptr is the first free block, we search for the adjacent block with curptr
-
-// loop through the VMM linked list until you find memsize amount of adjacent memory
-while (curptr->next != (struct vmmlist *) MMLIST_LAST)
-	{
-	if (curptr->base == (lastptr->base + lastptr->size)) // found the adjacent block
-		{
-		if (curptr->used == MM_FREE) // the adjacent block is free, we can merge
-			{
-			lastptr->size = lastptr->size + curptr->size;
-			// for debug
-			//printf("vmmlist merge 0x%xh with 0x%xh, size now 0x%xh \n",lastptr->base, curptr->base,lastptr->size);
-			lastptr->next = curptr->next; // skip curptr list item completely
-			vmmlist_delete(curptr);
-
-			// we have now merged once. If this is enough, return. If not, continue
-			if (lastptr->size >= memsize)
-				return lastptr;
-			else
-				{
-				curptr = lastptr->next;
-				continue;
-				}
-			}
-		else	// the adjacent block is not free, we'll continue looping from the next block
-			{
-			lastptr = lastptr->next;
-			curptr = lastptr;
-			curptr = curptr->next;
-			continue;
-			}
-		}
-	else // this is not the adjacent block, loop until you find it
-		{
-		curptr = curptr->next;
-		}
-
-	}
-
-}
-
-
-/////////////////////////////////////////////////////////////////
-// Mark a certain area in VMM used - map virt to phys
-/////////////////////////////////////////////////////////////////
-void vmmlist_use(struct vmmlist *linkedlistptr, int memsize)
-{
-// mark the memory area used both in VMM and in PMM
-linkedlistptr->used = MM_USED;
-unsigned int i;
-// map virtual to physical
-for (i = 0; i <= memsize / PAGESIZE; i++)
-	{
-	// TODO: adjust the page tables so that the virtual address space is mapped to the physical memory
-//	tables[index] = WHAT VIRTUAL ADDRES? linkedlistptr->base?
-	pmm_getframe();
-	}
-
-// found a big enough free memory area, let's use it
-//printf("found a free area: 0x%xh\n",linkedlistptr->base);
-}
-
 // =====================================================================
-// kmalloc, krealloc and kfree are the final functions used by kernel
+// kmalloc and kfree are the final functions used by kernel
 // =====================================================================
+
+// TODO: heap memory manager
+// currently, we can only allocate 4kb chunks with the vm.
+// Instead, we should be able to allocate smaller chunks
+// so, the current vmm should be the heap manager that allocates variable size memory chunks, not 4kb ones
+// also, this requires the singly linked list to be of variable size (no need to worry about deletion anymore)
+// and the virtual memory manager allocates virtual memory (through page faults) whenever needed.
+// thus, divide the current VMM into two parts, the page fault part and the current part (and rename it "heap")
 
 /////////////////////////////////////////////////////////////////
 // Allocate memsize worth of memory and return a pointer to its base
@@ -373,11 +313,26 @@ if (memsize > ((unsigned long) (&endofkernel - pmm_stackptr) * PAGESIZE))
 	panic("kmalloc: we're out of memory!\n"); 
 
 // ask the virtual memory manager for a contiguous virtual memory address the size of memsize
-int retval =  vmmlist_insert_unknown(memsize);
+int retval =  vmmlist_insert(memsize);
 
-//printf("kmalloc() returns address 0x%xh\n",retval);
+// find out which listitem holds this memory area
+struct vmmlist *curptr = vmmlist_start;
+while (curptr->base != retval)
+	curptr = curptr->next;
+
+int i;
+// reserve physical memory, adjust paging and virt2phys mappings
+for ( i = curptr->base; i < (curptr->base + curptr->size); i = i + PAGESIZE)
+	{
+	paging_mapvirt2phys(i, pmm_getframe()); // get a physical frame and map it to a virtual address
+	paging_protection(i, 0); // set protection
+	paging_present(i,1); // set page present
+	}
+
+printf("kmalloc() returns address 0x%xh\n",retval);
 return (int *)retval;
 }
+
 
 //////////////////////////////////////
 // Deallocate memory pointed to by ptr
@@ -388,151 +343,38 @@ void kfree(void *ptr)
 if (ptr == NULL || ptr == 0)
 	return;
 
-// find out which linked list item holds this pointer, and free it
+// find out which linked list item holds this pointer
 
 struct vmmlist *curptr = vmmlist_start;
 while (curptr->next != MMLIST_LAST)
 	{
-	if (curptr->base == ptr)
-		{
-		curptr->used = MM_FREE; // mark the area free in VMM
+	if (curptr->base == ptr) // found it
 		break;
-		}
+
 	curptr = curptr->next;
 	}
 
 
 // ask the page table which physical frames are now to be released and release them
+int *pte_ptr;
 int i = curptr->base;
-int j,k;
-int *pagetable;
+
+int pageframe;
 
 for (i = curptr->base; (unsigned int) i < (curptr->base + curptr->size); i = i + PAGESIZE)
 	{
-	for (j = 0; j < 1024; j++) // page dir entries
-		{
-		pagetable = kernel_pagedir[j] & 0xFFFFF000;
-		for (k = 0;k < 1024; k++) // page table entries
-			{
-			if ((pagetable[k] & 0xFFFFF000) == curptr->base)
-				{
-				pmm_releaseframe(j*1024 + k);	// release the physical frame
-				}
-			}
-		}
+	pte_ptr = paging_findphysaddr(i); // get the page table address that holds this virtual address
+	// get the physical frame (index, not address)
+	// TODO: wonder what'll happen when we'll move from PAGESIZE'd kmallocs to variable sized..
+	pageframe = (int) pte_ptr / PAGESIZE;
+	// 1. release the physical frame
+	pmm_releaseframe(pageframe);
+	// 2. mark the area free in paging
+	paging_present(pte_ptr,0);
 	}
 
+// 3. finally, set the area free in the linked list
+printf("kfree() freed 0x%xh\n",curptr->base);
+curptr->used = MM_FREE;
 return;
 }
-
-
-void *krealloc(void *ptr, unsigned long memsize)
-{
-// TODO: remember to go through this function..
-panic("krealloc() has not been revised - here be dragons");
-/* straight from linux man:
-The realloc() function changes the size of the memory block pointed to by ptr to size bytes.  The contents
-will be unchanged in the range from the start of the region up to the minimum of the old and new sizes.  If
-the new size is larger than the old size, the added memory will not be initialized.
-
-If the area pointed to was moved, a free(ptr) is done.
-*/
-
-// If ptr is NULL, then the call is equivalent to malloc(size), for all values of size;
-if (ptr == NULL)
-	return kmalloc(memsize);
-
-// if size is equal to zero,  and  ptr  is  not NULL,  then  the call is equivalent to free(ptr).
-if (memsize == 0)
-	{
-	kfree(ptr);
-	return 0;
-	}
-
-// reallocation
-
-
-// read the current values of the list item
-// ptr points to a base address of memory, so we need to loop through the list to find the item that has the same base
-struct vmmlist *linkedlistptr = (struct vmmlist *) &endofkernel;
-while (linkedlistptr->next != (struct vmmlist *) MMLIST_LAST)
-	{
-	if(linkedlistptr->base == (unsigned long) ptr)
-		break;
-	linkedlistptr = linkedlistptr->next;
-	}
-
-if(linkedlistptr->next == (struct vmmlist *) MMLIST_LAST && linkedlistptr->base != (unsigned long) ptr) // didn't find anything
-	panic("krealloc couldn't find the proper list item!\n");
-
-//at this point, linkedlistptr is the item we want to realloc
-struct vmmlist *temp = (struct vmmlist *) linkedlistptr;
-
-// case 0: do nothing
-if (memsize == linkedlistptr->size)
-	return ptr;
-
-printf("ptr is 0x%xh, newsize is 0x%xh, oldsize is 0x%xh\n",linkedlistptr,memsize, temp->size);
-// case 1: decrease memory size and add the extra memory to the linked list as free
-if (memsize < temp->size)
-	{
-	temp->size = memsize;
-
-	// make linkedlistptr point to the last item
-	linkedlistptr = (struct vmmlist *) &endofkernel;
-	while (linkedlistptr->next != (struct vmmlist *) MMLIST_LAST)
-		linkedlistptr = linkedlistptr->next;
-
-	struct vmmlist *linkedlistptr = (struct vmmlist *) &endofkernel;
-	while (linkedlistptr->next != (struct vmmlist *) MMLIST_LAST)
-		linkedlistptr = linkedlistptr->next;
-
-	// add the new struct as the last item in the list
-	struct vmmlist *newarea = (struct vmmlist *) vmmlist_insert_known(temp->size - memsize,linkedlistptr);
-	newarea->base = temp->base + temp->size;
-	newarea->used = MM_FREE;
-	newarea->size = temp->size;
-
-	return ptr;
-	}
-
-// case 2: increase memory size
-if (memsize > temp->size)
-	{
-	// loop through the items to see if the item with base overlapping ptr + memsize is free or uninitialized - can we merge?
-	// TODO..
-
-	// can't merge, we need to relocate the memory.
-
-	// kmalloc the first usable  memory area
-	int *newptr = kmalloc(memsize);
-//	struct vmmlist *newlistptr = (struct vmmlist *) &newptr;
-
-
-
-	// copy the current used memory to the new area
-	// ptr points to a base address of memory, so we need to loop through the list to find the item that has the same base
-	struct vmmlist *oldptr = (struct vmmlist *) &endofkernel;
-	while (oldptr->next != (struct vmmlist *) MMLIST_LAST)
-		{
-		if(oldptr->base == (unsigned long) ptr)
-			break;
-		oldptr = oldptr->next;
-		}
-
-	// note that newptr is a pointer to the actual memory, not to the list vmmlist like oldptr is
-	memcpy((void *) newptr, (void *) oldptr->base,oldptr->size);
-	printf("debug: krealloc old base 0x%xh and size 0x%xh\n",oldptr->base,oldptr->size);
-	printf("debug: krealloc moved the stuff from 0x%xh to 0x%xh\n",oldptr->base,newptr);
-
-	// kfree the old area
-	kfree(ptr);
-
-	// return the new pointer
-	return newptr;
-	}
-
-
-return 0; // don't think we should ever reach this point
-}
-

@@ -44,7 +44,7 @@ init_irq();
 init_keyboard();
 init_ata();
 init_vfs();
-init_memory(boot_info);
+init_memory(boot_info); // note that kmalloc gets initialized here, it should be done very early instead of very late
 
 printf("%s booted and ready to go!\n", CODENAME);
 

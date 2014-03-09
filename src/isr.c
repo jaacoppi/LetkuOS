@@ -4,10 +4,12 @@
 #include "string.h"
 #include "stdio.h"
 #include "letkuos-common.h"
-
+#include "mm.h"
 // Part of this code is modified from Bran's kernel development tutorials.
 // Rewritten for JamesM's kernel development tutorials.
 //
+
+extern unsigned int *kernel_pagedir;
 
 char *exception_messages[] =
 {
@@ -49,6 +51,10 @@ int page_fault_handler(int errcode);
 
 
 // This gets called from our ASM interrupt handler stub.
+// NOTE: we're actually doing double work here:
+// idt is a function table that currently has all entries pointing here
+// now we create another function table with a switch statement
+// you could just set idt to point to correct functions to start with
 void isr_handler(registers_t regs)
 {
 
@@ -70,6 +76,7 @@ switch (regs.int_no)
 		break;
 		}
         }
+return;
 }
 
 
@@ -100,11 +107,41 @@ int user = errcode & 0x4;           // Processor was in user-mode?
 int reserved = errcode & 0x8;     // Overwritten CPU-reserved bits of page entry?
 int id = errcode & 0x10;          // Caused by an instruction fetch?
 
-// currently just print and panic since we don't know how to handle it
 
 // The faulting address is stored in the CR2 register.
 unsigned int faulting_address;
 __asm__ __volatile__("mov %%cr2, %0" : "=r" (faulting_address));
+
+// pde and pte are the indices to page directory and page table
+int pde = faulting_address / ( PAGESIZE * 1024);
+int pte = (faulting_address - (PAGESIZE*1024*pde)) / PAGESIZE;
+
+// TODO: use CR3 instead of this once we hit userland..
+// remember, in pde and pte the physical address is 20 bits, rest are flags
+int *pde_addr = kernel_pagedir[pde] & 0xFFFFF000;
+
+// either the pde or the pte doesn't exist at all..
+if (pde_addr == 0 || pde_addr[pte] == 0)
+        panic("page fault handler TODO: implement this");
+
+
+
+// ================
+// ON DEMAND PAGING
+// ================
+
+// if the page is not present, map it to a physical address and set present
+if (!present)
+	{
+	paging_mapvirt2phys(faulting_address,pmm_getframe());
+	paging_present(faulting_address,1);
+	}
+return;
+// TODO: figure out if currently running in kernel or usermode and act accordingly
+
+
+
+// currently just print and panic since we don't know how to handle it
 
 printf("\nA page fault occurred at 0x%xh. Here's the details:\n",faulting_address);
 if (present)

@@ -9,6 +9,8 @@
 
 #include "multiboot.h"
 
+void *kmalloc(unsigned long memsize);
+int pmm_getframe();
 // the usable memory area is divided into a singly linked list of struct physmems.
 // a list item can control anything from a 4kb to memorymap.size (=all memory available) chunk of memory
 // if all memory allocated is 4kb, the singly linked list is full and there can be no more items
@@ -22,19 +24,20 @@ struct vmmlist
 
 void init_mm();
 void *kmalloc(unsigned long memsize);
+void *kmalloc_known(void *addr, unsigned long memsize, int protection);
 void kfree(void *ptr);
 void *krealloc(void *ptr, unsigned long memsize);
 void mm_defrag();
 int list_insert(unsigned long memsize, struct vmmlist *linkedlistptr);
 
 extern unsigned int *kernel_pagedir; // used by vmm to find out virtual to physical mappings
-// for the linked list
+// for the linked list heap manager
 #define MMLIST_LAST	0x108
-// for the singly linked next fit memory manager
-#define MM_UNINIT	0x0
 #define MM_FREE		0x123
 #define MM_USED		0x321
 
+// start of the heap manager
+struct vmmlist *vmmlist_start;
 
 void init_memory(struct multiboot_info *bootinfo);
 
