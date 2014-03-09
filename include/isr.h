@@ -7,6 +7,7 @@
 #ifndef _letkuos_isrs_h
 #define _letkuos_isrs_h  _letkuos_isrs_h
 
+#include "paging.h"
 //
 // isr.h -- Interface and structures for high level interrupt service routines.
 // Part of this code is modified from Bran's kernel development tutorials.

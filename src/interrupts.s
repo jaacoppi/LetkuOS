@@ -104,12 +104,8 @@ isr_common_stub:
     mov es, ax
     mov fs, ax
     mov gs, ax
- ;  mov eax, esp   ; Push us the stack
- ;  push eax
-;   mov eax, isr_handler
-;   call eax       ; A special call, preserves the 'eip' register
-	call isr_handler
-    pop eax
+
+call isr_handler
     pop gs
     pop fs
     pop es
