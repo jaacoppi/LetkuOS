@@ -323,7 +323,6 @@ int fat_loadfile(char *filename)
 // find out how big the file is. Store the info in ptr entry
 struct file_entry *entry = kmalloc(sizeof (file_entry));
 fat_populate_entry(entry, filename);
-
 // ptr must be big enough to hold the whole file..
 unsigned char *ptr = kmalloc(entry->size);
 
@@ -331,17 +330,14 @@ int startcluster = entry->startcluster;
 kfree(entry);
 
 // read sectors to the memory address ptr until there are no more sectors to be read
-unsigned char *temp_ptr = kmalloc(512);
-int *retptr = ptr; // in the loop we advance the pointer when copying the text to memory. Thus, return the beginning of ptr, not the end
+int *retptr = (int *) ptr; // in the loop we advance the pointer when copying the text to memory. Thus, return the beginning of ptr, not the end
 while (true)
         {
         // convert FAT cluster to ATA sector and read the sector
         int sector = fat_cluster2sector(startcluster);
 
-	temp_ptr = ata_readblock(sector);
-
 	// copy the read sector to the memory address ptr
-	memcpy(ptr, temp_ptr, 512);
+	memcpy(ptr, ata_readblock(sector),512);
 
         // find out next cluster to be read
         int next = get_cluster_value(startcluster);
@@ -353,11 +349,11 @@ while (true)
                 startcluster = next;
                 ptr = (int) ptr + 512; // ptr + 512 would increase by 2048 - but for some reason it's correct..
                 }
-
         }
 
 // note: ptr must remain allocated since it's the copy of the file callers will use
-kfree(temp_ptr);
+// TODO: make sure ptr is not leaking memory
+
 return retptr;
 }
 
@@ -388,7 +384,7 @@ kfree(buffer);
 
 // parse the file name the be sought inside the directory
 char filetemp[11] = "";
-ptr = ptr + len + 1; // advance pointer beyond the dir path. The +1 is the final \
+ptr = ptr + len + 1; // advance pointer beyond the dir path. The +1 is the final "\", last in path
 //strncpy(filetemp, (const char *) ptr, (strlen(filename) - len));
 strncpy(filetemp, (const char *) ptr, filelen);
 // populate the file_entry struct with the file info - we know the starting cluster of the directory
