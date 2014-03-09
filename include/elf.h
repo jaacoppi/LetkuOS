@@ -27,15 +27,16 @@ ing must have a section header table; other object files may or may not have one
 #define EI_NIDENT 16
 
 // data types & sizes from the specs again:
-#define Elf32_Half unsigned int 	// 2 bytes
-#define Elf32_Word unsigned long int 	// 4 bytes
-#define Elf32_Off  unsigned long int 	// 4 bytes
-#define Elf32_Addr  unsigned long int 	// 4 bytes
+#define Elf32_Half unsigned short 	// 2 bytes ?
+#define Elf32_Word unsigned int 	// 4 bytes ?
+#define Elf32_Off  unsigned int 	// 4 bytes ?
+#define Elf32_Addr  unsigned int 	// 4 bytes ?
+#define Elf32_Char  unsigned char 	// 1 byte
 
 #define ET_EXEC 2
 #define EM_386	3
 typedef struct {
-	unsigned char e_ident[EI_NIDENT]; // 0x7F 'E' 'L' 'F'
+	Elf32_Char e_ident[EI_NIDENT]; // 0x7F 'E' 'L' 'F'
 	Elf32_Half e_type;	// file type,  ET_EXEC if file is an executable file
 	Elf32_Half e_machine;	// machine type, EM_386 for a Intel 386 machine
 	Elf32_Word e_version;	// must be 1?
@@ -50,6 +51,19 @@ typedef struct {
 	Elf32_Half e_shnum;	// number of section headers
 	Elf32_Half e_shstrndx;	// section header index of the table associated with section name string table
 } Elf32_Ehdr;
+
+#define PT_LOAD	1
+typedef struct
+{
+  Elf32_Word    p_type;                 // PT_NULL 0 (ignored, PT_LOAD 1 (map filesz to mem), plz panic on others
+  Elf32_Off     p_offset;               // first byte of this segment in the file
+  Elf32_Addr    p_vaddr;                // virtual address this segment needs to be loaded to
+  Elf32_Addr    p_paddr;                // same as vaddr if physical addressing is used - BUT IT'S NOT
+  Elf32_Word    p_filesz;               // number of bytes in segment to be loaded
+  Elf32_Word    p_memsz;                // number of bytes in memory image. if > filesz, pad the rest with 0
+  Elf32_Word    p_flags;                // PF_X, PF_W, PF_R. text = X+R, data = X+W+R
+  Elf32_Word    p_align;                // 0 and 1 mean no alignment, otherwise align p_vaddr and p_offset to this me$
+} Elf32_Phdr;
 
 
 // section header table
